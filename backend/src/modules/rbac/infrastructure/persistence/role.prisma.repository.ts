@@ -8,6 +8,7 @@ import {
   PermissionNotFoundError,
   RoleTransactionError,
 } from '../../domain/errors/role.errors';
+import { RoleMapper } from '../../domain/mappers';
 
 @Injectable()
 export class RolePrismaRepository implements RoleRepositoryPort {
@@ -17,23 +18,24 @@ export class RolePrismaRepository implements RoleRepositoryPort {
     const roles = await this.prisma.role.findMany({
       where: { users: { some: { userId } } },
     });
-    return roles.map((r) => new Role(r.id, r.name, r.description));
+    return RoleMapper.toDomainList(roles);
   }
 
   async findById(id: string): Promise<Role | null> {
     const r = await this.prisma.role.findUnique({ where: { id } });
-    return r ? new Role(r.id, r.name, r.description) : null;
+    return r ? RoleMapper.toDomain(r) : null;
   }
 
   async findByName(name: string): Promise<Role | null> {
     const r = await this.prisma.role.findUnique({ where: { name } });
-    return r ? new Role(r.id, r.name, r.description) : null;
+    return r ? RoleMapper.toDomain(r) : null;
   }
 
   async create(name: string, description?: string | null): Promise<Role> {
     try {
-      const r = await this.prisma.role.create({ data: { name, description } });
-      return new Role(r.id, r.name, r.description);
+      const createData = RoleMapper.toPersistenceCreate({ name, description });
+      const r = await this.prisma.role.create({ data: createData });
+      return RoleMapper.toDomain(r);
     } catch (err: any) {
       if (err.code === 'P2002') {
         throw new RoleTransactionError(`El rol "${name}" ya existe.`);
@@ -44,7 +46,7 @@ export class RolePrismaRepository implements RoleRepositoryPort {
 
   async list(): Promise<Role[]> {
     const rows = await this.prisma.role.findMany({ orderBy: { name: 'asc' } });
-    return rows.map((r) => new Role(r.id, r.name, r.description));
+    return RoleMapper.toDomainList(rows);
   }
 
   async createWithPermissions(
@@ -54,8 +56,9 @@ export class RolePrismaRepository implements RoleRepositoryPort {
   ): Promise<Role> {
     try {
       const role = await this.prisma.$transaction(async (tx) => {
+        const createData = RoleMapper.toPersistenceCreate({ name, description });
         const createdRole = await tx.role.create({
-          data: { name, description },
+          data: createData,
         });
 
         if (permissionIds?.length > 0) {
@@ -83,7 +86,7 @@ export class RolePrismaRepository implements RoleRepositoryPort {
         return createdRole;
       });
 
-      return new Role(role.id, role.name, role.description);
+      return RoleMapper.toDomain(role);
     } catch (err: any) {
       if (err instanceof PermissionNotFoundError) throw err;
       throw new RoleTransactionError(err.message);
