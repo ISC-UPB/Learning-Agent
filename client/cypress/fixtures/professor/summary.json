@@ -1,0 +1,11 @@
+{
+  "coursesCount": 4,
+  "upcomingExams": [
+    { "course": "Algebra I", "date": "2025-11-05T14:00:00Z" },
+    { "course": "Física II", "date": "2025-11-12T14:00:00Z" }
+  ],
+  "notifications": [
+    { "id": "n1", "message": "Entrega de notas pendiente", "level": "warning" },
+    { "id": "n2", "message": "Solicitud de revisión: Sección B", "level": "info" }
+  ]
+}
