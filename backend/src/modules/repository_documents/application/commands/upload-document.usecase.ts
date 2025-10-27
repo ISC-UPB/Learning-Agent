@@ -10,7 +10,6 @@ import {
 import { UploadDocumentRequest } from '../../domain/value-objects/upload-document.vo';
 import { DocumentChunkingService } from '../../domain/services/document-chunking.service';
 import { DocumentService } from '../../domain/services/document.service';
-import { DocumentChunkService } from '../../domain/services/document-chunk.service';
 
 /**
  * Options for reusing pre-generated data during upload
@@ -88,65 +87,33 @@ export class UploadDocumentUseCase {
       options?.classId,
     );
 
-    // Save to database
-    const savedDocument = await this.documentRepository.save(document);
+    let savedDocument: Document;
+    try {
+      if (
+        options?.reuseGeneratedData &&
+        options.preGeneratedChunks &&
+        options.preGeneratedEmbeddings
+      ) {
+        const chunkData = options.preGeneratedChunks.map((chunk, index) => ({
+          id: uuidv4(),
+          content: chunk.content,
+          chunkIndex: index,
+          type: 'text',
+          metadata: chunk.metadata || {},
+        }));
 
-    // If we have pre-generated data, save it to avoid regeneration
-    if (
-      options?.reuseGeneratedData &&
-      options.preGeneratedChunks &&
-      options.preGeneratedEmbeddings
-    ) {
-      try {
-        // Convert pre-generated chunks to DocumentChunk entities
-        const documentChunks = options.preGeneratedChunks.map((chunk, index) =>
-          DocumentChunkService.create(
-            uuidv4(), // New unique ID for each chunk
-            documentId, // Document ID
-            chunk.content, // Chunk content
-            index, // Chunk index
-            'text', // Default type
-            chunk.metadata || {}, // Chunk metadata
-          ),
+        savedDocument = await this.documentRepository.saveWithChunksAndEmbeddings(
+          document,
+          chunkData,
+          options.preGeneratedEmbeddings,
+          options.extractedText,
         );
-
-        // Use chunking service to save chunks
-        const savedChunks =
-          await this.chunkingService['chunkRepository'].saveMany(
-            documentChunks,
-          );
-
-        // Save embeddings for each chunk
-        if (
-          options.preGeneratedEmbeddings &&
-          options.preGeneratedEmbeddings.length === savedChunks.length
-        ) {
-          const embeddingUpdates = savedChunks.map((chunk, index) => ({
-            chunkId: chunk.id,
-            embedding: options.preGeneratedEmbeddings![index],
-          }));
-
-          await this.chunkingService['chunkRepository'].updateBatchEmbeddings(
-            embeddingUpdates,
-          );
-        }
-
-        // Update document to mark it has extracted text
-        if (options.extractedText) {
-          let updatedDocument = DocumentService.withExtractedText(
-            savedDocument,
-            options.extractedText,
-          );
-          updatedDocument = DocumentService.withStatus(
-            updatedDocument,
-            DocumentStatus.PROCESSED,
-          );
-
-          await this.documentRepository.save(updatedDocument);
-        }
-      } catch {
-        // Don't fail the complete upload for this, just log it
+      } else {
+        savedDocument = await this.documentRepository.save(document);
       }
+    } catch (error) {
+      await this.storageAdapter.softDeleteDocument(storageResult.fileName);
+      throw new Error(`Failed to save document to database: ${error.message}`);
     }
 
     return savedDocument;
