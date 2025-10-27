@@ -53,23 +53,41 @@ export class DeleteDocumentUseCase {
 
       this.logger.log(`File exists in storage: ${document.fileName}`);
 
-      // Perform soft delete in storage
-      this.logger.log(`Starting soft delete in storage...`);
-      await this.storageAdapter.softDeleteDocument(document.fileName);
-      this.logger.log(`Soft delete in storage completed`);
-      // Perform soft delete of associated chunks FIRST
-      this.logger.log(`Marking chunks as deleted...`);
-      await this.chunkRepository.softDeleteByDocumentId(documentId);
-      this.logger.log(`Chunks marked as deleted`);
+      // Store current status for potential rollback
+      const previousStatus = document.status;
+      
+      try {
+        // First mark document and chunks as deleted in database
+        this.logger.log(`Marking chunks as deleted...`);
+        await this.chunkRepository.softDeleteByDocumentId(documentId);
+        this.logger.log(`Chunks marked as deleted`);
 
-      // Change document status to DELETED (soft delete)
-      this.logger.log(`Marking document as deleted in database...`);
+        this.logger.log(`Marking document as deleted in database...`);
+        await this.documentRepository.updateStatus(
+          documentId,
+          DocumentStatus.DELETED,
+        );
+        this.logger.log(`Document marked as deleted in database`);
 
-      await this.documentRepository.updateStatus(
-        documentId,
-        DocumentStatus.DELETED,
-      );
-      this.logger.log(`Document marked as deleted`);
+        // Then perform soft delete in storage
+        this.logger.log(`Starting soft delete in storage...`);
+        await this.storageAdapter.softDeleteDocument(document.fileName);
+        this.logger.log(`Soft delete in storage completed`);
+      } catch (error) {
+        // If storage operation fails, restore database state
+        this.logger.error(`Error in delete operation, initiating rollback: ${error.message}`);
+        
+        try {
+          await this.documentRepository.restoreStatus(documentId, previousStatus);
+          await this.chunkRepository.restoreByDocumentId(documentId);
+          this.logger.log(`Database state restored successfully`);
+        } catch (rollbackError) {
+          this.logger.error(`Rollback failed: ${rollbackError.message}`);
+          throw new Error(`Delete failed and rollback failed: ${rollbackError.message}`);
+        }
+        
+        throw error;
+      }
 
       this.logger.log(
         `Deletion completed successfully: ${document.originalName}`,

@@ -10,6 +10,7 @@ export interface DocumentStoragePort {
   listDocuments(): Promise<DocumentListItem[]>;
   documentExists(fileName: string): Promise<boolean>;
   softDeleteDocument(fileName: string): Promise<void>;
+  deleteFile(fileName: string, isRollback?: boolean): Promise<void>;
 
   /**
    * Download the content of a file as a Buffer

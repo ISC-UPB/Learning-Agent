@@ -552,4 +552,27 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     const bucketName = process.env.MINIO_BUCKET_NAME || 'documents';
     return `${endpoint}/${bucketName}/${s3Key}`;
   }
+
+  async restoreStatus(
+    id: string, 
+    previousStatus: DocumentStatus
+  ): Promise<Document | undefined> {
+    try {
+      this.logger.log(`Restoring document ${id} to status ${previousStatus}`);
+      const document = await this.prisma.document.update({
+        where: { id },
+        data: { 
+          status: previousStatus as any,
+          updatedAt: new Date()
+        },
+      });
+
+      return this.mapToDomain(document);
+    } catch (error) {
+      this.logger.error(
+        `Error restoring document ${id} status: ${error.message}`,
+      );
+      throw new Error(`Failed to restore document status: ${error.message}`);
+    }
+  }
 }

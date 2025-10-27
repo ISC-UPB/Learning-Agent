@@ -4,12 +4,14 @@ import type { PasswordHasherPort } from '../../domain/ports/password-hasher.port
 import type { TokenServicePort } from '../../domain/ports/token-service.port';
 import type { SessionRepositoryPort } from '../../domain/ports/session.repository.port';
 import type { TokenExpirationService } from '../../domain/services/token-expiration.service';
+import type { ConfigPort } from '../../domain/ports/config.port';
 import { 
   HASHER, 
   SESSION_REPO, 
   TOKEN_SERVICE, 
   USER_REPO, 
-  TOKEN_EXPIRATION_SERVICE 
+  TOKEN_EXPIRATION_SERVICE,
+  CONFIG_PORT
 } from '../../tokens';
 import { JwtPayload } from 'jsonwebtoken';
 import {
@@ -25,6 +27,7 @@ export class LoginUseCase {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenServicePort,
     @Inject(SESSION_REPO) private readonly sessions: SessionRepositoryPort,
     @Inject(TOKEN_EXPIRATION_SERVICE) private readonly tokenExpiration: TokenExpirationService,
+    @Inject(CONFIG_PORT) private readonly config: ConfigPort,
   ) {}
 
   async execute(input: {
@@ -57,7 +60,7 @@ export class LoginUseCase {
     const accessToken = this.tokens.signAccess(payload);
     const refreshToken = this.tokens.signRefresh(payload);
 
-    const refreshTTL = process.env.JWT_REFRESH_TTL || '7d';
+    const refreshTTL = this.config.getJwtRefreshTTL();
     const { expiresAt } = this.tokenExpiration.calculateExpiration(refreshTTL);
 
     await this.sessions.createSession({

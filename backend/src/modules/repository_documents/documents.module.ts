@@ -64,6 +64,7 @@ import { NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { AuthMiddleware } from './infrastructure/http/middleware/auth.middleware';
 import { LoggingMiddleware } from './infrastructure/http/middleware/logging.middleware';
 import { ContextualLoggerService } from './infrastructure/services/contextual-logger.service';
+import { StorageReconciliationService } from './infrastructure/services/storage-reconciliation.service';
 @Module({
   imports: [PrismaModule, IdentityModule],
   controllers: [
@@ -75,6 +76,7 @@ import { ContextualLoggerService } from './infrastructure/services/contextual-lo
     AiConfigService,
 
     ContextualLoggerService,
+    StorageReconciliationService,
 
     { provide: DOCUMENT_STORAGE_PORT, useClass: S3StorageAdapter },
     {
@@ -393,6 +395,8 @@ import { ContextualLoggerService } from './infrastructure/services/contextual-lo
     EMBEDDING_GENERATOR_PORT,
     VECTOR_SEARCH_PORT,
     DELETED_DOCUMENT_REPOSITORY_PORT,
+
+    StorageReconciliationService,
   ],
 })
 export class DocumentsModule implements NestModule {

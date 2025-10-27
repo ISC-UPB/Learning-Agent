@@ -73,8 +73,14 @@ export class S3StorageAdapter implements DocumentStoragePort {
           uploadDate: new Date().toISOString(),
         },
       });
-      // Upload file to MinIO
-      await this.s3Client.send(putObjectCommand);
+      // Upload file to MinIO with error handling
+      try {
+        await this.s3Client.send(putObjectCommand);
+      } catch (storageError) {
+        this.logger.error(`Failed to upload file to storage: ${storageError.message}`);
+        throw new Error(`Storage upload failed: ${storageError.message}`);
+      }
+      
       const url = `${this.endpoint}/${this.bucketName}/${fileName}`;
       this.logger.log(`Document uploaded successfully to ${url}`);
       // Create Document entity (simple version for compatibility)
@@ -310,12 +316,13 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Delete a file from MinIO
+   * Delete a file from MinIO. Used for rollback in case of database errors.
    * @param fileName - File name to delete
+   * @param isRollback - If true, indicates this is a rollback operation
    */
-  async deleteFile(fileName: string): Promise<void> {
+  async deleteFile(fileName: string, isRollback: boolean = false): Promise<void> {
     try {
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      this.logger.debug(`${isRollback ? 'Rolling back' : 'Deleting'} file ${fileName} from storage`);
       const deleteCommand = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,

@@ -5,12 +5,20 @@ describe('RefreshUseCase', () => {
   let useCase: RefreshUseCase;
   let sessionRepo: any;
   let tokenService: any;
+  let tokenExpiration: any;
+  let config: any;
 
   beforeEach(() => {
     sessionRepo = { findByRefreshToken: jest.fn(), revokeById: jest.fn(), createSession: jest.fn() };
     tokenService = { verifyRefresh: jest.fn(), signAccess: jest.fn(), signRefresh: jest.fn() };
+    tokenExpiration = { 
+      calculateExpiration: jest.fn().mockReturnValue({ expiresAt: new Date() }) 
+    };
+    config = {
+      getJwtRefreshTTL: jest.fn().mockReturnValue('7d'),
+    };
 
-    useCase = new RefreshUseCase(sessionRepo, tokenService);
+    useCase = new RefreshUseCase(sessionRepo, tokenService, tokenExpiration, config);
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});

@@ -11,6 +11,7 @@ import {
   TOKEN_SERVICE,
   AUTHZ_PORT,
   TOKEN_EXPIRATION_SERVICE,
+  CONFIG_PORT,
 } from './tokens';
 import { UserPrismaRepository } from './infrastructure/persistence/user.prisma.repository';
 import { SessionPrismaRepository } from './infrastructure/persistence/session.prisma.repository';
@@ -22,6 +23,7 @@ import { RbacAuthzAdapter } from './infrastructure/authz/rbac-authz.adapter';
 import { RbacModule } from '../rbac/rbac.module';
 import { RequestInfoService } from './infrastructure/request-info.service';
 import { TokenExpirationService } from './domain/services/token-expiration.service';
+import { EnvConfigAdapter } from './infrastructure/config/env-config.adapter';
 
 @Module({
   imports: [PrismaModule, forwardRef(() => RbacModule)],
@@ -45,6 +47,8 @@ import { TokenExpirationService } from './domain/services/token-expiration.servi
 
     RbacAuthzAdapter,
     { provide: AUTHZ_PORT, useClass: RbacAuthzAdapter },
+
+    { provide: CONFIG_PORT, useClass: EnvConfigAdapter },
   ],
   exports: [
     TOKEN_SERVICE,
