@@ -6,9 +6,11 @@ import type {
   FindChunksResult,
   FindChunksOptions,
 } from '../../domain/ports/document-chunk-repository.port';
+import * as crypto from 'crypto';
 
 /**
  * Adaptador de repositorio para DocumentChunk usando Prisma
+ * Implementa idempotencia y deduplicación por hash de contenido
  */
 @Injectable()
 export class PrismaDocumentChunkRepositoryAdapter
@@ -21,68 +23,95 @@ export class PrismaDocumentChunkRepositoryAdapter
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Guarda un chunk en la base de datos
+   * Genera un hash SHA-256 único para el contenido del chunk
+   */
+  private generateChunkHash(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
+   * Guarda un chunk en la base de datos (con deduplicación por hash)
    */
   async save(chunk: DocumentChunk): Promise<DocumentChunk> {
-    try {
+    const chunkHash = this.generateChunkHash(chunk.content);
 
+    try {
       const savedChunk = await this.prisma.documentChunk.create({
         data: {
           id: chunk.id,
           documentId: chunk.documentId,
           content: chunk.content,
           chunkIndex: chunk.chunkIndex,
-          startPosition: 0, // Valor por defecto
-          endPosition: chunk.content.length, // Valor por defecto
+          startPosition: 0,
+          endPosition: chunk.content.length,
           type: chunk.type,
           wordCount: this.countWords(chunk.content),
           charCount: chunk.content.length,
           metadata: chunk.metadata,
+          chunkHash,
           createdAt: chunk.createdAt,
         },
       });
 
       return this.mapToEntity(savedChunk);
-    } catch (error) {
+    } catch (error: any) {
+      // Prisma error de duplicado (P2002)
+      if (error.code === 'P2002') {
+        this.logger.warn(
+          `Chunk duplicado detectado para documentId=${chunk.documentId} (hash=${chunkHash})`,
+        );
+        const existing = await this.prisma.documentChunk.findFirst({
+          where: { documentId: chunk.documentId, chunkHash },
+        });
+        return this.mapToEntity(existing);
+      }
+
       this.logger.error(`Error guardando chunk ${chunk.id}:`, error);
       throw new Error(`Error guardando chunk: ${error}`);
     }
   }
 
   /**
-   * Guarda múltiples chunks en una transacción (más eficiente)
+   * Guarda múltiples chunks en una transacción (con deduplicación)
    */
   async saveMany(chunks: DocumentChunk[]): Promise<DocumentChunk[]> {
-    if (chunks.length === 0) {
-      return [];
-    }
+    if (chunks.length === 0) return [];
 
     try {
-      this.logger.log(`Guardando ${chunks.length} chunks en transacción...`);
+      this.logger.log(`Guardando ${chunks.length} chunks (con deduplicación)...`);
 
-      const savedChunks = await this.prisma.$transaction(
-        chunks.map((chunk) =>
-          this.prisma.documentChunk.create({
-            data: {
-              id: chunk.id,
-              documentId: chunk.documentId,
-              content: chunk.content,
-              chunkIndex: chunk.chunkIndex,
-              startPosition: 0,
-              endPosition: chunk.content.length,
-              type: chunk.type,
-              wordCount: this.countWords(chunk.content),
-              charCount: chunk.content.length,
-              metadata: chunk.metadata,
-              createdAt: chunk.createdAt,
-            },
-          }),
-        ),
+      const data = chunks.map((chunk) => ({
+        id: chunk.id,
+        documentId: chunk.documentId,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex,
+        startPosition: 0,
+        endPosition: chunk.content.length,
+        type: chunk.type,
+        wordCount: this.countWords(chunk.content),
+        charCount: chunk.content.length,
+        metadata: chunk.metadata,
+        chunkHash: this.generateChunkHash(chunk.content),
+        createdAt: chunk.createdAt,
+      }));
+
+      // Inserta en lote, omitiendo duplicados por (documentId, chunkHash)
+      const result = await this.prisma.documentChunk.createMany({
+        data,
+        skipDuplicates: true,
+      });
+
+      this.logger.log(
+        `Chunks insertados: ${result.count} (duplicados omitidos automáticamente)`,
       );
 
-      this.logger.log(`${savedChunks.length} chunks guardados exitosamente`);
+      // Retorna todos los chunks actuales del documento
+      const allChunks = await this.prisma.documentChunk.findMany({
+        where: { documentId: chunks[0].documentId },
+        orderBy: { chunkIndex: 'asc' },
+      });
 
-      return savedChunks.map((chunk) => this.mapToEntity(chunk));
+      return allChunks.map((chunk) => this.mapToEntity(chunk));
     } catch (error) {
       this.logger.error(`Error guardando ${chunks.length} chunks:`, error);
       throw new Error(`Error guardando chunks en lote: ${error}`);

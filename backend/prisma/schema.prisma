@@ -184,6 +184,7 @@ model DocumentChunk {
   
   content         String    @db.Text         // Contenido del chunk
   chunkIndex      Int                        // Índice del chunk en el documento
+  chunkHash       String
   startPosition   Int                        // Posición de inicio en el texto original
   endPosition     Int                        // Posición de fin en el texto original
   pageNumber      Int?                       // Página de origen (si aplica)
@@ -202,6 +203,7 @@ model DocumentChunk {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
+  @@unique([documentId, chunkHash])
   @@unique([documentId, chunkIndex])
   @@index([documentId])
   @@index([type])
@@ -253,7 +255,7 @@ model ProcessingJob {
   completedAt  DateTime?
   createdAt    DateTime         @default(now())
   
-  @@index([documentId, jobType])
+ @@unique([documentId, jobType])
   @@index([status])
   @@index([createdAt])
 }
