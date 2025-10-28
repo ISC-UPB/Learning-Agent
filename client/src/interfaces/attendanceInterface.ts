@@ -1,3 +1,13 @@
+import type { StudentInfo } from "./studentInterface";
+
+export interface AttendanceModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  students: StudentInfo[];
+  classId: string;
+}
+
 export interface CreateAttendanceInterface {
     classId: string,
     teacherId: string,
