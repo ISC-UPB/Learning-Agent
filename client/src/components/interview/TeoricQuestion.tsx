@@ -1,160 +1,179 @@
-import { useEffect, useState } from 'react';
-import { Checkbox, Button, Typography, theme, Card } from 'antd';
+import React from 'react';
+import { Button, Typography, theme, Radio } from 'antd';
 import { RightOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import QuestionLoading from '../QuestionLoading';
+import { useTeoricQuestion } from '../../hooks/useTeoricQuestion';
+import type { MultipleSelectionResponse } from '../../interfaces/interviewInt';
 
-const { Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
+
+const WIDTH = 900;
+const HEIGHT = '60vh';
+const TOP_OFFSET = '5vh';
 
 interface TeoricQuestionProps {
-  onNext: () => void;
-}
-interface MultipleSelectionResponse {
-  question: string;
-  options: string[];
-  correctAnswer: number;
-  explanation: string;
+   onNext: () => void;
+   selectedValues: MultipleSelectionResponse[];
+   setSelectedValues: React.Dispatch<React.SetStateAction<MultipleSelectionResponse[]>>;
 }
 
-export default function TeoricQuestion({ onNext }: TeoricQuestionProps) {
+export default function TeoricQuestion({ onNext, selectedValues, setSelectedValues }: TeoricQuestionProps) {
   const { token } = theme.useToken();
-  const [selectedValues, setSelectedValues] = useState<string[]>([]);
-  const [mulOption, setMulOption] = useState<MultipleSelectionResponse>();
+  const { mulOption, loading, loadingMessageIndex, loadingMessages, handleOptionChange, handleNextClick } = useTeoricQuestion({
+    selectedValues,
+    setSelectedValues,
+    onNext,
+  });
 
-  useEffect(() => {
-    fetchQuestion();
-  }, []);
-  async function fetchQuestion() {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_URL}${import.meta.env.VITE_CHATINT_MULTOPTION_URL}`
-      );
-      const obj = await res.json() as MultipleSelectionResponse;
-      setMulOption(obj);
-    } catch (error) { 
-      console.log(error);
-    }
+  if (loading) {
+    return (
+      <QuestionLoading
+        loadingMessage={loadingMessages[loadingMessageIndex]}
+        token={token}
+      />
+    );
   }
+
+  if (!mulOption) return null;
 
   return (
     <div
       style={{
-        flex: 1,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
         padding: token.paddingLG,
         backgroundColor: token.colorBgLayout,
       }}
     >
-      <Card
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: token.sizeSM }}>
-            <QuestionCircleOutlined />
-            <Typography.Text style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-              Pregunta Teórica
-            </Typography.Text>
-          </div>
-        }
-        bordered={false}
+      <div
         style={{
-          width: '100%',
-          maxWidth: 600,
-          backgroundColor: token.colorBgContainer,
-          borderRadius: token.borderRadiusLG,
-          boxShadow: token.boxShadow,
-        }}
-        bodyStyle={{
+          marginTop: TOP_OFFSET,
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
-          padding: token.paddingLG,
+          width: WIDTH,
+          height: HEIGHT,
+          backgroundColor: token.colorBgLayout,
+          borderRadius: token.borderRadiusLG,
+          boxShadow: token.boxShadow,
+          overflow: 'hidden',
         }}
       >
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
             padding: token.paddingMD,
-            borderRadius: token.borderRadiusLG,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
             backgroundColor: token.colorBgContainer,
-            maxWidth: '100%',
-            marginBottom: token.marginLG,
-            textAlign: 'center',
+          }}
+        >
+          <QuestionCircleOutlined style={{ marginRight: token.marginSM, color: token.colorPrimary }} />
+          <Text style={{ fontSize: '1.25rem', fontWeight: 500, color: token.colorTextHeading }}>
+            Pregunta Teórica
+          </Text>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: token.paddingLG,
+            backgroundColor: token.colorBgLayout,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: token.marginLG,
           }}
         >
           <Paragraph
             style={{
               margin: 0,
-              fontWeight: 'bold',
+              fontWeight: 600,
               color: token.colorText,
-              fontSize: token.fontSizeLG,
+              fontSize: token.fontSizeXL,
+              textAlign: 'center',
+              lineHeight: 1.6,
             }}
           >
-             {mulOption?.question}
+            {mulOption.question}
           </Paragraph>
-        </div>
 
-        <Checkbox.Group
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: token.marginSM,
-            alignItems: 'center',
-            width: '100%',
-          }}
-          value={selectedValues}
-          onChange={(checked) => setSelectedValues(checked as string[])}
-        >
-          {mulOption?.options.map((option,i) => {
-            const selected = selectedValues.includes(option);
-            return (
-              <Checkbox
-                key={i}
-                value={option}
-                style={{ width: '100%', maxWidth: 320 }}
-              >
-                <div
-                  style={{
-                    padding: `${token.paddingSM}px ${token.paddingLG}px`,
-                    borderRadius: token.borderRadiusLG,
-                    border: `2px solid ${selected ? token.colorPrimary : token.colorBorderSecondary}`,
-                    backgroundColor: selected ? token.colorPrimaryBg : token.colorBgContainer,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s',
-                  }}
-                >
-                  <Paragraph
+          <Radio.Group
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: token.marginMD,
+              justifyContent: 'center',
+            }}
+            onChange={(e) => handleOptionChange(e.target.value)}
+          >
+            {mulOption.options.map((option, i) => {
+              const selected = mulOption.givenAnswer == i;
+              return (
+                <Radio key={i} value={i} style={{ margin: 0 }}>
+                  <div
                     style={{
-                      margin: 0,
-                      fontWeight: 'bold',
-                      color: token.colorText,
+                      width: 320,
+                      padding: token.paddingMD,
+                      borderRadius: token.borderRadiusLG,
+                      border: `2px solid ${selected ? token.colorPrimary : token.colorBorderSecondary}`,
+                      backgroundColor: token.colorBgContainer,
+                      boxShadow: selected 
+                        ? `0 4px 12px ${token.colorPrimary}33`
+                        : token.boxShadowSecondary,
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      textAlign: 'center',
                     }}
                   >
-                     {option}
-                  </Paragraph>
-                </div>
-              </Checkbox>
-            );
-          })}
-        </Checkbox.Group>
+                    <Paragraph
+                      style={{
+                        margin: 0,
+                        fontWeight: 'bold',
+                        color: token.colorText,
+                        fontSize: token.fontSize,
+                      }}
+                    >
+                      {option}
+                    </Paragraph>
+                  </div>
+                </Radio>
+              );
+            })}
+          </Radio.Group>
+        </div>
+      </div>
 
-        {selectedValues.length > 0 && (
+      {mulOption.givenAnswer != undefined && (
+        <div
+          style={{
+            width: WIDTH,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: token.marginMD,
+            paddingRight: 0,
+          }}
+        >
           <Button
             type="primary"
             size="large"
-            onClick={onNext}
+            onClick={handleNextClick}
             style={{
-              marginTop: token.marginLG,
               borderRadius: token.borderRadiusLG,
               height: 48,
               padding: `0 ${token.paddingLG}px`,
               fontWeight: 600,
               boxShadow: token.boxShadow,
-              backgroundColor: token.colorPrimary,
             }}
           >
             Siguiente Pregunta <RightOutlined />
           </Button>
-        )}
-      </Card>
+        </div>
+      )}
     </div>
   );
 }

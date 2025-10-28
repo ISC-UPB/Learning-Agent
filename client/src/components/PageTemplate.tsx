@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { Avatar, Breadcrumb, Typography } from "antd";
 import { SunOutlined, MoonOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 import { useThemeStore } from "../store/themeStore";
 
 const { Title, Text } = Typography;
@@ -34,14 +35,14 @@ export default function PageTemplate({
   return (
     <div className="h-screen overflow-hidden flex flex-col">
       <header className="shrink-0 space-y-4 px-4 md:px-0">
-        <div className="flex items-end justify-between gap-4">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-start md:items-end justify-between gap-3">
+          <div className="min-w-0 flex-1">
             {breadcrumbs && breadcrumbs.length > 0 && (
               <Breadcrumb
                 className="mb-1"
                 items={breadcrumbs.map((b) => ({
                   title: b.href ? (
-                    <a href={b.href as string}>{b.label}</a>
+                    <Link to={b.href as string}>{b.label}</Link>
                   ) : (
                     b.label
                   ),
@@ -49,7 +50,7 @@ export default function PageTemplate({
               />
             )}
 
-            <Title level={2} className="!m-0">
+            <Title level={2} className="!m-0 leading-tight">
               {title}
             </Title>
             {subtitle && (
@@ -59,7 +60,11 @@ export default function PageTemplate({
             )}
           </div>
 
-          {actions && <div className="flex gap-2">{actions}</div>}
+          {actions && (
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+              {actions}
+            </div>
+          )}
 
           {user && (
             <div className="flex items-center gap-3 bg-[var(--app-background-color)] p-2 rounded-lg shadow-sm">

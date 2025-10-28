@@ -481,7 +481,8 @@ const UploadButton: React.FC<UploadButtonProps> = ({
             alignItems: 'center', 
             color: isDark ? '#ffffff' : FIXED_COLOR,
             fontSize: '18px',
-            fontWeight: '600'
+            fontWeight: '600',
+            textShadow: 'none'
           }}>
             {title}
           </div>
@@ -494,7 +495,7 @@ const UploadButton: React.FC<UploadButtonProps> = ({
         destroyOnClose={false}
         styles={{
           header: {
-            backgroundColor: isDark ? token.colorBgContainer : '#f8f9ff',
+            backgroundColor: isDark ? token.colorBgElevated : '#ffffffff',
             borderBottom: `1px solid ${isDark ? token.colorBorder : '#e8eaed'}`
           },
           body: {
@@ -551,8 +552,6 @@ const UploadButton: React.FC<UploadButtonProps> = ({
                   icon={<PlusOutlined />}
                   onClick={handleManualSelect}
                   style={{
-                    backgroundColor: isDark ? token.colorPrimary : '#1890ff',
-                    borderColor: isDark ? token.colorPrimary : '#1890ff',
                     borderRadius: '6px',
                     fontWeight: '500'
                   }}

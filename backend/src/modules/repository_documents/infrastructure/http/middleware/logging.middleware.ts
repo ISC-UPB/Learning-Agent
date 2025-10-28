@@ -12,11 +12,11 @@ export class LoggingMiddleware implements NestMiddleware {
   private readonly logger = new Logger('DocumentsAPI');
 
   use(req: LoggingRequest, res: Response, next: NextFunction) {
-    // Generar ID único para la petición
+    // Generate a unique ID for the request
     req.requestId = uuidv4();
     req.startTime = Date.now();
 
-    // Log de inicio de petición
+    // Request start log
     this.logger.log(
       `[${req.requestId}] ${req.method} ${req.url} - Request started`,
       {
@@ -29,40 +29,32 @@ export class LoggingMiddleware implements NestMiddleware {
       },
     );
 
-    // Interceptar la respuesta para loggear el final
+    // Intercept response to log completion
     const originalSend = res.send;
     res.send = function (body: any) {
       const duration = Date.now() - (req.startTime || 0);
-      
+
       const logLevel = res.statusCode >= 400 ? 'error' : 'log';
       const logMessage = `[${req.requestId}] ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`;
-      
+
       if (logLevel === 'error') {
-        Logger.prototype.error.call(
-          new Logger('DocumentsAPI'),
-          logMessage,
-          {
-            requestId: req.requestId,
-            method: req.method,
-            url: req.url,
-            statusCode: res.statusCode,
-            duration,
-            timestamp: new Date().toISOString(),
-          },
-        );
+        Logger.prototype.error.call(new Logger('DocumentsAPI'), logMessage, {
+          requestId: req.requestId,
+          method: req.method,
+          url: req.url,
+          statusCode: res.statusCode,
+          duration,
+          timestamp: new Date().toISOString(),
+        });
       } else {
-        Logger.prototype.log.call(
-          new Logger('DocumentsAPI'),
-          logMessage,
-          {
-            requestId: req.requestId,
-            method: req.method,
-            url: req.url,
-            statusCode: res.statusCode,
-            duration,
-            timestamp: new Date().toISOString(),
-          },
-        );
+        Logger.prototype.log.call(new Logger('DocumentsAPI'), logMessage, {
+          requestId: req.requestId,
+          method: req.method,
+          url: req.url,
+          statusCode: res.statusCode,
+          duration,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       return originalSend.call(this, body);

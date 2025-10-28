@@ -1,13 +1,12 @@
 import apiClient from "../api/apiClient";
 import axios from "axios";
-import { meAPI } from "./authService";
+import { useUserStore } from "../store/userStore";
 import type { 
   Document, 
   DocumentListResponse, 
   UploadResponse 
 } from "../interfaces/documentInterface";
 
-// Interface para errores de HTTP
 interface HttpError {
   response?: {
     status: number;
@@ -16,20 +15,14 @@ interface HttpError {
   message?: string;
 }
 
-// Interface para la información del usuario
-interface UserInfo {
-  id: string;
-  email: string;
-  name: string;
-  lastname: string;
-  roles: string[];
-}
+const getUserFromStore = () => {
+  return useUserStore.getState().user;
+};
 
-// Función auxiliar para obtener el token de autenticación y verificar que el usuario esté autenticado
-const getAuthTokenAndVerifyUser = async (): Promise<{ token: string; user: UserInfo }> => {
+const getAuthToken = async (): Promise<string> => {
   const authData = localStorage.getItem("auth");
   if (!authData) {
-    throw new Error('No hay datos de autenticación disponibles. Por favor, inicia sesión.');
+    throw new Error('No authentication data available. Please log in.');
   }
   
   try {
@@ -37,22 +30,15 @@ const getAuthTokenAndVerifyUser = async (): Promise<{ token: string; user: UserI
     const token = parsedAuth.accessToken;
     
     if (!token) {
-      throw new Error('Token de acceso no encontrado. Por favor, inicia sesión nuevamente.');
+      throw new Error('Access token not found. Please log in again.');
     }
     
-    // Verificar que el token sea válido y obtener información del usuario
-    const user = await meAPI(token) as UserInfo;
-    
-    return { token, user };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('Error al obtener información del usuario')) {
-      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
-    }
-    throw new Error('Error al verificar la autenticación. Por favor, inicia sesión nuevamente.');
+    return token;
+  } catch (_error) {
+    throw new Error('Error parsing authentication data. Please log in again.');
   }
 };
 
-// Interfaces para las respuestas del backend
 interface DocumentBackendResponse {
   id: string;
   fileName: string;
@@ -61,6 +47,8 @@ interface DocumentBackendResponse {
   size: number;
   downloadUrl: string;
   uploadedAt: string;
+  courseId?: string;
+  classId?: string;
 }
 
 interface DocumentListBackendResponse {
@@ -131,14 +119,19 @@ interface DocumentChunksBackendResponse {
 }
 
 export const documentService = {
-  /**
-   * Obtener lista de documentos
-   */
-  async getDocuments(): Promise<DocumentListResponse> {
+  async getDocuments(filters?: { courseId?: string; classId?: string }): Promise<DocumentListResponse> {
     try {
-      const response = await apiClient.get<DocumentListBackendResponse>('/api/documents');
+      const params = new URLSearchParams();
+      if (filters?.courseId) {
+        params.append('courseId', filters.courseId);
+      }
+      if (filters?.classId) {
+        params.append('classId', filters.classId);
+      }
       
-      // Mapear respuesta del backend a nuestra interfaz
+      const url = `/api/documents${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await apiClient.get<DocumentListBackendResponse>(url);
+      
       const documents: Document[] = response.data.documents.map(doc => ({
         id: doc.id,
         fileName: doc.fileName,
@@ -147,6 +140,8 @@ export const documentService = {
         size: doc.size,
         downloadUrl: doc.downloadUrl,
         uploadedAt: doc.uploadedAt,
+        courseId: doc.courseId,
+        classId: doc.classId,
       }));
 
       return {
@@ -158,27 +153,36 @@ export const documentService = {
       };
     } catch (error) {
       console.error('Error loading documents:', error);
-      throw new Error('Error al cargar los documentos');
+      throw new Error('Error loading documents');
     }
   },
 
-  /**
-   * Subir un documento
-   */
-  async uploadDocument(file: File): Promise<UploadResponse> {
+  async uploadDocument(
+    file: File, 
+    options?: { courseId?: string; classId?: string }
+  ): Promise<UploadResponse> {
     try {
-      // Obtener el token y verificar autenticación usando meAPI
-      const { token } = await getAuthTokenAndVerifyUser();
+      const user = getUserFromStore();
+      const userId = user?.id;
+
+      const token = await getAuthToken();
+    
+      console.log('Uploading document for user:', userId);
 
       const formData = new FormData();
       formData.append('file', file);
+    
+      if (options?.courseId) {
+        formData.append('courseId', options.courseId);
+      }
+      if (options?.classId) {
+        formData.append('classId', options.classId);
+      }
 
-      // Preparar headers (NO incluir Content-Type para multipart/form-data)
       const headers = {
         'Authorization': `Bearer ${token}`,
       };
 
-      // Usar axios directamente para evitar conflictos con interceptores
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/";
       
       const response = await axios.post<UploadBackendResponse>(
@@ -186,16 +190,14 @@ export const documentService = {
         formData,
         { 
           headers,
-          timeout: 30000 // 30 segundos de timeout
+          timeout: Number(import.meta.env.VITE_UPLOAD_TIMEOUT) || 600000 // 10 minutes timeout for large file uploads
         }
       );
 
-      // Verificar que el documento existe en la respuesta
       if (!response.data.document) {
-        throw new Error('El servidor no devolvió información del documento');
+        throw new Error('Server did not return document information');
       }
 
-      // Mapear respuesta del backend a nuestra interfaz
       const document: Document = {
         id: response.data.document.id,
         fileName: response.data.document.fileName,
@@ -204,47 +206,42 @@ export const documentService = {
         size: response.data.document.size,
         downloadUrl: response.data.document.downloadUrl,
         uploadedAt: response.data.document.uploadedAt,
+        courseId: options?.courseId,
+        classId: options?.classId,
       };
 
       return {
         success: true,
         data: document,
-        status: response.data.status, // Agregar el status del backend
+        status: response.data.status,
       };
     } catch (error: unknown) {
       console.error('Error uploading document:', error);
       
       const httpError = error as HttpError;
       
-      // Manejar errores específicos de duplicados (409)
       if (httpError.response?.status === 409) {
         const errorData = httpError.response.data as { message?: string };
-        throw new Error(errorData?.message || 'Documento duplicado detectado');
+        throw new Error(errorData?.message || 'Duplicate document detected');
       }
       
-      // Manejar errores específicos de autenticación
       if (httpError.response?.status === 401) {
-        throw new Error('No autorizado. Por favor, inicia sesión nuevamente.');
+        throw new Error('Unauthorized. Please log in again.');
       }
       
       if (httpError.response?.status === 403) {
-        throw new Error('Sin permisos para subir documentos.');
+        throw new Error('No permissions to upload documents.');
       }
       
-      // Si es un error de la función getAuthTokenAndVerifyUser, mantener el mensaje original
-      if ((error as Error).message?.includes('autenticación') || 
-          (error as Error).message?.includes('sesión') ||
-          (error as Error).message?.includes('meAPI')) {
+      if ((error as Error).message?.includes('authentication') || 
+          (error as Error).message?.includes('session')) {
         throw error;
       }
       
-      throw new Error('Error al subir el documento. Por favor, inténtalo nuevamente.');
+      throw new Error('Error uploading document. Please try again.');
     }
   },
 
-  /**
-   * Descargar un documento usando su ID
-   */
   async getDownloadUrl(documentId: string): Promise<string> {
     try {
       const response = await apiClient.get(`/api/documents/download/${documentId}`);
@@ -255,59 +252,44 @@ export const documentService = {
     }
   },
 
-  /**
-   * Descargar y guardar documento usando su ID
-   */
   async downloadAndSaveDocument(documentId: string, originalName: string): Promise<void> {
     try {
-      // Obtener la URL de descarga usando axios (nuestro backend)
       const downloadUrlResponse = await apiClient.get(`/api/documents/download/${documentId}`);
       const downloadUrl = downloadUrlResponse.data.downloadUrl;
-      
-      // Usar fetch() para MinIO ya que axios puede interferir con las URLs firmadas
+
       const response = await fetch(downloadUrl);
       if (!response.ok) {
-        throw new Error(`Error al descargar: ${response.status} ${response.statusText}`);
+        throw new Error(`Download error: ${response.status} ${response.statusText}`);
       }
       
       const blob = await response.blob();
-      
-      // Crear URL temporal para el blob
+
       const blobUrl = window.URL.createObjectURL(blob);
-      
-      // Crear enlace temporal para descarga forzada
+
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = originalName.endsWith('.pdf') ? originalName : `${originalName}.pdf`;
-      
-      // Forzar descarga
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Limpiar blob URL para liberar memoria
+
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error('Error downloading document:', error);
-      throw new Error('Error al descargar el documento');
+      throw new Error('Error downloading document');
     }
   },
 
-  /**
-   * Eliminar un documento
-   */
   async deleteDocument(documentId: string): Promise<void> {
     try {
       await apiClient.delete<DeleteBackendResponse>(`/api/documents/${documentId}`);
     } catch (error) {
       console.error('Error deleting document:', error);
-      throw new Error('Error al eliminar el documento');
+      throw new Error('Error deleting document');
     }
   },
 
-  /**
-   * Procesar chunks de un documento
-   */
   async processDocumentChunks(
     documentId: string,
     options?: {
@@ -328,26 +310,20 @@ export const documentService = {
       return response.data;
     } catch (error) {
       console.error('Error processing document chunks:', error);
-      throw new Error('Error al procesar los chunks del documento');
+      throw new Error('Error processing document chunks');
     }
   },
 
-  /**
-   * Obtener chunks de un documento
-   */
   async getDocumentChunks(documentId: string): Promise<DocumentChunksBackendResponse> {
     try {
       const response = await apiClient.get<DocumentChunksBackendResponse>(`/api/documents/${documentId}/chunks`);
       return response.data;
     } catch (error) {
       console.error('Error getting document chunks:', error);
-      throw new Error('Error al obtener los chunks del documento');
+      throw new Error('Error getting document chunks');
     }
   },
-
-  /**
-   * Generar embeddings para un documento
-   */
+ 
   async generateDocumentEmbeddings(
     documentId: string,
     options?: {
@@ -390,26 +366,20 @@ export const documentService = {
       return response.data;
     } catch (error) {
       console.error('Error generating embeddings:', error);
-      throw new Error('Error al generar embeddings');
+      throw new Error('Error generating embeddings');
     }
   },
 
-  /**
-   * Procesar texto de un documento
-   */
   async processDocumentText(documentId: string): Promise<{ success: boolean; message: string }> {
     try {
       const response = await apiClient.post(`/api/documents/${documentId}/process-text`);
       return response.data;
     } catch (error) {
       console.error('Error processing document text:', error);
-      throw new Error('Error al procesar el texto del documento');
+      throw new Error('Error processing document text');
     }
   },
 
-  /**
-   * Procesamiento completo de un documento (upload + process + chunks)
-   */
   async processDocumentComplete(
     file: File,
     onProgress?: (step: string, progress: number, message: string) => void
@@ -423,23 +393,20 @@ export const documentService = {
     };
   }> {
     try {
-      // Paso 1: Upload
-      onProgress?.('upload', 25, 'Subiendo documento...');
+      onProgress?.('upload', 25, 'Uploading document...');
       const uploadResult = await this.uploadDocument(file);
       
       if (!uploadResult.data.id) {
-        throw new Error('No se obtuvo ID del documento subido');
+        throw new Error('Document ID not obtained from upload');
       }
 
-      // Paso 2: Procesar texto
-      onProgress?.('text', 50, 'Procesando texto...');
+      onProgress?.('text', 50, 'Processing text...');
       await this.processDocumentText(uploadResult.data.id);
 
-      // Paso 3: Procesar chunks
-      onProgress?.('chunks', 75, 'Generando chunks...');
+      onProgress?.('chunks', 75, 'Generating chunks...');
       const chunksResult = await this.processDocumentChunks(uploadResult.data.id);
 
-      onProgress?.('complete', 100, 'Proceso completado');
+      onProgress?.('complete', 100, 'Process completed');
 
       return {
         success: true,
@@ -453,6 +420,61 @@ export const documentService = {
     } catch (error) {
       console.error('Error in complete document processing:', error);
       throw new Error('Error en el procesamiento completo del documento');
+    }
+  },
+
+  async getDocumentIndex(documentId: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      index: Array<{
+        id: string;
+        title: string;
+        level: number;
+        page?: number;
+        content?: string;
+        chunkId?: string;
+        createdAt: string;
+      }>;
+      total: number;
+      metadata: {
+        documentId: string;
+        generatedAt: string;
+        structure: {
+          totalSections: number;
+          maxDepth: number;
+          averageSectionLength: number;
+        };
+      };
+    };
+  }> {
+    try {
+      const response = await apiClient.get(`/api/documents/${documentId}/index`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting document index:', error);
+      throw new Error('Error al obtener el índice del documento');
+    }
+  },
+
+  async generateDocumentIndex(documentId: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      totalSections: number;
+      processingTimeMs: number;
+      structure: {
+        maxDepth: number;
+        averageSectionLength: number;
+      };
+    };
+  }> {
+    try {
+      const response = await apiClient.post(`/api/documents/${documentId}/generate-index`);
+      return response.data;
+    } catch (error) {
+      console.error('Error generating document index:', error);
+      throw new Error('Error generating document index');
     }
   },
 };

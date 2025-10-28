@@ -1,0 +1,66 @@
+name: Pull-Request-Verification-client-FRONTEND
+
+on:
+  pull_request:
+    branches:
+      - qa
+      - develop
+    paths:
+      - 'client/**'
+
+jobs:
+
+  Build-Verification:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18'
+
+      - name: Install dependencies and build
+        run: |
+            npm install
+            npm run build
+
+  PR-Notification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      
+      - name: Set branch name
+        id: branch-name
+        run: |
+            echo "BRANCH_NAME=$(echo ${{ github.head_ref }} | sed 's/refs\/heads\///')" >> $GITHUB_ENV
+            echo "BRANCH_NAME_DEST=$(echo ${{ github.event.pull_request.base.ref }} | sed 's/refs\/heads\///')" >> $GITHUB_ENV
+
+      - name: Discord Webhook Action for PR
+        uses: tsickert/discord-webhook@v5.3.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_CLIENT }}
+          embed-title: "🚀 Nuevo Pull Request 🚀"
+          embed-color: "16711680"
+          embed-description: |                                                    
+                    📜 **Repositorio:** ${{ github.event.repository.name }}
+        
+                    📝 **PR ID:** #${{ github.event.number }}
+        
+                    📢 **Título del PR:** ${{ github.event.pull_request.title }}
+        
+                    🔗 **URL del PR:** ${{ github.event.pull_request.html_url }}
+        
+                    🔀 **Branch origin:** ${{ env.BRANCH_NAME }}
+
+                    🔀 **Branch destiny:** ${{ env.BRANCH_NAME_DEST }}
+        
+                    🔍 **Cambios:** [Ver Cambios](${{ github.event.pull_request._links.html.href }})
+                    
+                    **¡Revisa la sección de Pull Requests del repositorio!** 
+          embed-author-name: "${{ github.event.pull_request.user.login }}"
+          embed-author-url: "${{ github.event.pull_request.user.html_url }}"
+          embed-author-icon-url: "${{ github.event.pull_request.user.avatar_url }}"

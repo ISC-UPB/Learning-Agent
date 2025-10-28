@@ -1,7 +1,7 @@
 import type { DocumentChunk } from '../entities/document-chunk.entity';
 
 /**
- * Resultado de búsqueda de chunks
+ * Search results for chunks
  */
 export interface FindChunksResult {
   chunks: DocumentChunk[];
@@ -9,43 +9,43 @@ export interface FindChunksResult {
 }
 
 /**
- * Opciones para búsqueda de chunks
+ * Options for chunk search
  */
 export interface FindChunksOptions {
-  /** Límite de resultados */
+  /** Result limit */
   limit?: number;
 
-  /** Offset para paginación */
+  /** Offset for pagination */
   offset?: number;
 
-  /** Ordenar por campo específico */
+  /** Order by specific field */
   orderBy?: 'chunkIndex' | 'createdAt' | 'contentLength';
 
-  /** Dirección del ordenamiento */
+  /** Order direction */
   orderDirection?: 'asc' | 'desc';
 }
 
 /**
- * Puerto del repositorio para operaciones con DocumentChunk
+ * Repository port for DocumentChunk operations
  */
 export interface DocumentChunkRepositoryPort {
   /**
-   * Guarda un chunk en el repositorio
+   * Save a chunk in the repository
    */
   save(chunk: DocumentChunk): Promise<DocumentChunk>;
 
   /**
-   * Guarda múltiples chunks en una sola operación (más eficiente)
+   * Save multiple chunks in a single operation (more efficient)
    */
   saveMany(chunks: DocumentChunk[]): Promise<DocumentChunk[]>;
 
   /**
-   * Busca un chunk por su ID
+   * Find a chunk by its ID
    */
   findById(id: string): Promise<DocumentChunk | null>;
 
   /**
-   * Busca todos los chunks de un documento específico
+   * Find all chunks of a specific document
    */
   findByDocumentId(
     documentId: string,
@@ -53,7 +53,7 @@ export interface DocumentChunkRepositoryPort {
   ): Promise<FindChunksResult>;
 
   /**
-   * Busca chunks por tipo
+   * Find chunks by type
    */
   findByType(
     type: string,
@@ -61,28 +61,37 @@ export interface DocumentChunkRepositoryPort {
   ): Promise<FindChunksResult>;
 
   /**
-   * Elimina todos los chunks de un documento
-   * (útil para re-procesamiento)
+   * Delete all chunks of a specific document
    */
   deleteByDocumentId(documentId: string): Promise<void>;
 
   /**
-   * Elimina un chunk específico
+   * Soft delete all chunks of a specific document
+   */
+  softDeleteByDocumentId(documentId: string): Promise<void>;
+
+  /**
+   * Restore all deleted chunks of a specific document
+   */
+  restoreByDocumentId(documentId: string): Promise<void>;
+
+  /**
+   * Delete a specific chunk
    */
   deleteById(id: string): Promise<void>;
 
   /**
-   * Cuenta el número total de chunks de un documento
+   * Count the total number of chunks for a specific document
    */
   countByDocumentId(documentId: string): Promise<number>;
 
   /**
-   * Verifica si existen chunks para un documento
+   * Verify if chunks exist for a specific document
    */
   existsByDocumentId(documentId: string): Promise<boolean>;
 
   /**
-   * Obtiene estadísticas de chunks para un documento
+   * Get statistics for chunks of a specific document
    */
   getDocumentChunkStatistics(documentId: string): Promise<{
     totalChunks: number;
@@ -93,30 +102,30 @@ export interface DocumentChunkRepositoryPort {
   }>;
 
   /**
-   * Actualiza el embedding de un chunk específico
+   * Update the embedding of a specific chunk
    * @param chunkId ID del chunk a actualizar
    * @param embedding Vector de embedding
    */
   updateChunkEmbedding(chunkId: string, embedding: number[]): Promise<void>;
 
   /**
-   * Actualiza embeddings de múltiples chunks en lote
-   * @param updates Array de actualizaciones con chunkId y embedding
+   * Update embeddings of multiple chunks in batch
+   * @param updates Array of updates with chunkId and embedding
    */
   updateBatchEmbeddings(
     updates: Array<{ chunkId: string; embedding: number[] }>,
   ): Promise<void>;
 
   /**
-   * Verifica si un chunk tiene embedding generado
-   * @param chunkId ID del chunk a verificar
+   * Verify if a chunk has an embedding generated
+   * @param chunkId ID of the chunk to verify
    */
   hasEmbedding(chunkId: string): Promise<boolean>;
 
   /**
-   * Busca chunks que no tienen embeddings generados para un documento
-   * @param documentId ID del documento
-   * @param options Opciones de búsqueda
+   * Find chunks that do not have embeddings generated for a document
+   * @param documentId ID of the document
+   * @param options Search options
    */
   findChunksWithoutEmbeddings(
     documentId: string,

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../core/prisma/prisma.service';
 import { StudentRepositoryPort } from '../../domain/ports/student.repository.ports';
 import { Student } from '../../domain/entities/student.entity';
+import { StudentMapper } from '../../domain/mappers/student.mapper';
 
 @Injectable()
 export class StudentPrismaRepository implements StudentRepositoryPort {
@@ -9,23 +10,13 @@ export class StudentPrismaRepository implements StudentRepositoryPort {
     async findByCode(code: string): Promise<Student | null> {
         const student = await this.prisma.studentProfile.findUnique({ where: { code } });
         if (!student) return null;
-        return new Student(
-            student.userId,
-            student.code,
-            student.career || undefined,
-            student.admissionYear || undefined
-        );
+        return StudentMapper.toDomain(student);
     }
 
     async findByUserId(userId: string): Promise<Student | null> {
         const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
         if (!student) return null;
-        return new Student(
-            student.userId,
-            student.code,
-            student.career || undefined,
-            student.admissionYear || undefined
-        );
+        return StudentMapper.toDomain(student);
     };
 
     async create(userId: string, code: string, career?: string, admissionYear?: number): Promise<Student> {
@@ -37,21 +28,11 @@ export class StudentPrismaRepository implements StudentRepositoryPort {
                 admissionYear
             }
         });
-        return new Student(
-            newStudent.userId,
-            newStudent.code,
-            newStudent.career || undefined,
-            newStudent.admissionYear || undefined
-        );
+        return StudentMapper.toDomain(newStudent);
     }
 
     async list(): Promise<Student[]> {
         const rows = await this.prisma.studentProfile.findMany();
-        return rows.map((s) => new Student(
-            s.userId,
-            s.code,
-            s.career || undefined,
-            s.admissionYear || undefined
-        ));
+        return StudentMapper.toDomainArray(rows);
     };
 }

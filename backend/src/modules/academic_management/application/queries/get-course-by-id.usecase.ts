@@ -6,19 +6,29 @@ import { NotFoundError } from "../../../../shared/handler/errors";
 
 @Injectable()
 export class GetCourseByIdUseCase {
-    private readonly logger = new Logger(GetCourseByIdUseCase.name)
-    constructor (
+    private readonly logger = new Logger(GetCourseByIdUseCase.name);
+
+    constructor(
         @Inject(COURSE_REPO) private readonly courseRepo: CourseRepositoryPort,
     ) {}
 
     async execute(courseId: string): Promise<Course | null> {
-        const course = await this.courseRepo.findById(courseId);
+        this.logger.log(`Entry: execute - courseId=${courseId}`);
 
-        if(!course) {
-            this.logger.error(`Course not found with Id ${course}`)
-            throw new NotFoundError(`No se ha podido recuperar la información de la materia`)
+        try {
+            const course = await this.courseRepo.findById(courseId);
+
+            if (!course) {
+                this.logger.error(`Course not found - courseId=${courseId}`);
+                throw new NotFoundError(`No se ha podido recuperar la información de la materia`);
+            }
+
+            const isActive = course.isActive;
+            this.logger.log(`Success: course retrieved - courseId=${course.id}, isActive=${isActive}`);
+            return isActive ? course : null;
+        } catch (error) {
+            this.logger.error(`Error in execute - courseId=${courseId}`, error.stack);
+            throw error;
         }
-
-        return course.isActive ? course : null;
     }
 }

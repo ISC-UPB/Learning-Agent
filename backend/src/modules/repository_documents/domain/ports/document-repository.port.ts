@@ -2,59 +2,59 @@ import { Document, DocumentStatus } from '../entities/document.entity';
 
 export interface DocumentRepositoryPort {
   /**
-   * Guarda un documento en la base de datos
-   * @param document Documento a guardar
-   * @returns Documento guardado
+   * Save a document in the database
+   * @param document Document to save
+   * @returns Saved document
    */
   save(document: Document): Promise<Document>;
 
   /**
-   * Busca un documento por ID
-   * @param id ID del documento
-   * @returns Documento encontrado o undefined
+   * Find a document by ID
+   * @param id ID of the document
+   * @returns Document found or undefined
    */
   findById(id: string): Promise<Document | undefined>;
 
   /**
-   * Busca un documento por hash del archivo
-   * @param fileHash Hash SHA-256 del archivo
-   * @returns Documento encontrado o undefined
+   * Find a document by file hash
+   * @param fileHash Hash SHA-256 of the file
+   * @returns Document found or undefined
    */
   findByFileHash(fileHash: string): Promise<Document | undefined>;
 
   /**
-   * Busca un documento por su hash de texto normalizado
-   * @param textHash Hash SHA-256 del texto normalizado
-   * @returns Documento encontrado o undefined
+   * Find a document by text hash
+   * @param textHash Hash SHA-256 of the normalized text
+   * @returns Document found or undefined
    */
   findByTextHash(textHash: string): Promise<Document | undefined>;
 
   /**
-   * Busca un documento por clave S3
-   * @param s3Key Clave del archivo en S3
-   * @returns Documento encontrado o undefined
+   * Find a document by S3 key
+   * @param s3Key S3 key of the file
+   * @returns Document found or undefined
    */
   findByS3Key(s3Key: string): Promise<Document | undefined>;
 
   /**
-   * Lista documentos por estado
-   * @param status Estado del documento
-   * @returns Lista de documentos con el estado especificado
+   * Find documents by status
+   * @param status Document status
+   * @returns List of documents with the specified status
    */
   findByStatus(status: DocumentStatus): Promise<Document[]>;
 
   /**
-   * Lista documentos subidos por un usuario
-   * @param uploadedBy ID del usuario
-   * @returns Lista de documentos del usuario
+   * Find documents uploaded by a user
+   * @param uploadedBy ID of the user
+   * @returns List of documents uploaded by the user
    */
   findByUploadedBy(uploadedBy: string): Promise<Document[]>;
 
   /**
-   * Actualiza el estado de un documento
-   * @param id ID del documento
-   * @param status Nuevo estado
-   * @returns Documento actualizado o undefined si no existe
+   * Update the status of a document
+   * @param id ID of the document
+   * @param status New status
+   * @returns Updated document or undefined if it doesn't exist
    */
   updateStatus(
     id: string,
@@ -62,14 +62,14 @@ export interface DocumentRepositoryPort {
   ): Promise<Document | undefined>;
 
   /**
-   * Actualiza el texto extraído de un documento
-   * @param id ID del documento
-   * @param extractedText Texto extraído
-   * @param pageCount Número de páginas (opcional)
-   * @param documentTitle Título del documento (opcional)
-   * @param documentAuthor Autor del documento (opcional)
-   * @param language Idioma del documento (opcional)
-   * @returns Documento actualizado o undefined si no existe
+   * Update the extracted text of a document
+   * @param id ID of the document
+   * @param extractedText Extracted text
+   * @param pageCount Number of pages (optional)
+   * @param documentTitle Document title (optional)
+   * @param documentAuthor Document author (optional)
+   * @param language Document language (optional)
+   * @returns Updated document or undefined if it doesn't exist
    */
   updateExtractedText(
     id: string,
@@ -81,40 +81,53 @@ export interface DocumentRepositoryPort {
   ): Promise<Document | undefined>;
 
   /**
-   * Elimina un documento de la base de datos
-   * @param id ID del documento
-   * @returns true si se eliminó, false si no existía
+   * Delete a document from the database
+   * @param id ID of the document
+   * @returns true if deleted, false if it didn't exist
    */
   delete(id: string): Promise<boolean>;
 
   /**
-   * Lista todos los documentos con paginación
-   * @param offset Número de registros a saltar
-   * @param limit Número máximo de registros a retornar
-   * @returns Lista de documentos
+   * Find all documents with pagination
+   * @param offset Number of records to skip
+   * @param limit Maximum number of records to return
+   * @returns List of documents
    */
   findAll(offset?: number, limit?: number): Promise<Document[]>;
 
   /**
-   * Cuenta el total de documentos
-   * @returns Número total de documentos
+   * Find documents with optional filters by course and/or class
+   * @param filters Optional filters
+   * @param offset Number of records to skip
+   * @param limit Maximum number of records to return
+   * @returns List of filtered documents
+   */
+  findWithFilters(
+    filters?: { courseId?: string; classId?: string },
+    offset?: number,
+    limit?: number,
+  ): Promise<Document[]>;
+
+  /**
+   * Count the total number of documents
+   * @returns Total number of documents
    */
   count(): Promise<number>;
 
   /**
-   * Cuenta documentos por estado
-   * @param status Estado del documento
-   * @returns Número de documentos con el estado especificado
+   * Count documents by status
+   * @param status Document status
+   * @returns Number of documents with the specified status
    */
   countByStatus(status: DocumentStatus): Promise<number>;
 
   /**
-   * Lista documentos por curso/materia con paginación
-   * @param courseId ID del curso/materia
-   * @param offset Número de registros a saltar
-   * @param limit Número máximo de registros a retornar
-   * @param tipo Filtro opcional por tipo de archivo
-   * @returns Lista de documentos del curso
+   * Find documents by course ID with pagination
+   * @param courseId Course ID
+   * @param offset Number of records to skip
+   * @param limit Maximum number of records to return
+   * @param tipo Optional file type filter
+   * @returns List of documents from the course
    */
   findByCourseId(
     courseId: string,
@@ -124,21 +137,32 @@ export interface DocumentRepositoryPort {
   ): Promise<Document[]>;
 
   /**
-   * Cuenta documentos por curso/materia
-   * @param courseId ID del curso/materia
-   * @param tipo Filtro opcional por tipo de archivo
-   * @returns Número de documentos del curso
+   * Count documents by course ID
+   * @param courseId Course ID
+   * @param tipo Optional file type filter
+   * @returns Number of documents from the course
    */
   countByCourseId(courseId: string, tipo?: string): Promise<number>;
 
   /**
-   * Asocia un documento con un curso/materia
-   * @param documentId ID del documento
-   * @param courseId ID del curso/materia
-   * @returns Documento actualizado o undefined si no existe
+   * Associate a document with a course
+   * @param documentId Document ID
+   * @param courseId Course ID
+   * @returns Updated document or undefined if it doesn't exist
    */
   associateWithCourse(
     documentId: string,
     courseId: string,
+  ): Promise<Document | undefined>;
+
+  /**
+   * Restore document status in case of rollback
+   * @param id ID of the document
+   * @param previousStatus Previous status to restore
+   * @returns Restored document
+   */
+  restoreStatus(
+    id: string,
+    previousStatus: DocumentStatus,
   ): Promise<Document | undefined>;
 }

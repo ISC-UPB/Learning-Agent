@@ -1,6 +1,5 @@
 import axios from 'axios';
 import type { CancelTokenSource } from 'axios';
-import { meAPI } from './authService';
 
 export interface ChunkedUploadProgress {
   stepKey: string;
@@ -17,6 +16,8 @@ export interface ChunkedUploadOptions {
   maxRetries?: number;
   onProgress?: (progress: ChunkedUploadProgress) => void;
   onChunkComplete?: (chunkIndex: number, totalChunks: number) => void;
+  courseId?: string;
+  classId?: string;
 }
 
 export interface ChunkedUploadSession {
@@ -57,7 +58,7 @@ class ChunkedUploadService {
   private async getAuthToken(): Promise<string> {
     const authData = localStorage.getItem("auth");
     if (!authData) {
-      throw new Error('No hay datos de autenticación disponibles. Por favor, inicia sesión.');
+      throw new Error('No authentication data available. Please log in.');
     }
 
     try {
@@ -65,13 +66,12 @@ class ChunkedUploadService {
       const token = parsedAuth.accessToken;
 
       if (!token) {
-        throw new Error('Token de acceso no encontrado. Por favor, inicia sesión nuevamente.');
+        throw new Error('Access token not found. Please log in again.');
       }
 
-      await meAPI(token);
       return token;
     } catch {
-      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      throw new Error('Session expired. Please log in again.');
     }
   }
 
@@ -79,7 +79,7 @@ class ChunkedUploadService {
     file: File, 
     options: ChunkedUploadOptions = {}
   ): Promise<{ sessionId: string; session: ChunkedUploadSession }> {
-    const { chunkSize = 1024 * 1024 } = options;
+    const { chunkSize = Number(import.meta.env.VITE_DEFAULT_CHUNK_SIZE) || 1024 * 1024 } = options;
     
     try {
       const token = await this.getAuthToken();
@@ -117,14 +117,15 @@ class ChunkedUploadService {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          cancelToken: cancelTokenSource.token
+          cancelToken: cancelTokenSource.token,
+          timeout: Number(import.meta.env.VITE_UPLOAD_TIMEOUT) || 600000 // 10 minutes for upload initialization
         }
       );
 
       return { sessionId, session };
     } catch (error) {
       console.error('Error initializing upload session:', error);
-      throw new Error('Error al inicializar la sesión de subida');
+      throw new Error('Error initializing upload session');
     }
   }
 
@@ -136,14 +137,14 @@ class ChunkedUploadService {
     
     try {
       if (!file) {
-        throw new Error('No se ha seleccionado ningún archivo');
+        throw new Error('No file selected');
       }
 
       if (file.size === 0) {
-        throw new Error('El archivo está vacío');
+        throw new Error('File is empty');
       }
 
-      const { chunkSize = 1024 * 1024 } = options;
+      const { chunkSize = Number(import.meta.env.VITE_DEFAULT_CHUNK_SIZE) || 1024 * 1024 } = options;
       const totalChunks = Math.ceil(file.size / chunkSize);
       
       for (let i = 0; i < totalChunks; i++) {
@@ -153,7 +154,7 @@ class ChunkedUploadService {
         options.onProgress?.({
           stepKey: 'upload',
           progress,
-          message: `Subiendo chunk ${i + 1} de ${totalChunks}`,
+          message: `Uploading chunk ${i + 1} of ${totalChunks}`,
           uploadedBytes,
           totalBytes: file.size,
         });
@@ -164,23 +165,26 @@ class ChunkedUploadService {
       }
 
       const { documentService } = await import('./documents.service');
-      const result = await documentService.uploadDocument(file);
+      const result = await documentService.uploadDocument(file, {
+        courseId: options.courseId,
+        classId: options.classId
+      });
 
       if (!result.success) {
-        throw new Error('Error en la subida del documento');
+        throw new Error('Error uploading document');
       }
 
       options.onProgress?.({
         stepKey: 'complete',
         progress: 100,
-        message: 'Subida completada exitosamente'
+        message: 'Upload completed successfully'
       });
 
       return {
         success: true,
         document: result.data,
         sessionId,
-        status: result.status, // Pasar el status del backend
+        status: result.status, // Pass the backend status
       };
 
     } catch (error) {
@@ -189,7 +193,7 @@ class ChunkedUploadService {
       return {
         success: false,
         sessionId,
-        error: error instanceof Error ? error.message : 'Error desconocido en la subida'
+        error: error instanceof Error ? error.message : 'Unknown error in upload'
       };
     }
   }
@@ -198,7 +202,7 @@ class ChunkedUploadService {
     try {
       const cancelTokenSource = this.cancelTokens.get(sessionId);
       if (cancelTokenSource) {
-        cancelTokenSource.cancel('Upload cancelado por el usuario');
+        cancelTokenSource.cancel('Upload cancelled by user');
         this.cancelTokens.delete(sessionId);
       }
 
@@ -216,7 +220,7 @@ class ChunkedUploadService {
           }
         );
       } catch (error) {
-        console.warn('Error notificando cancelación al backend:', error);
+        console.warn('Error notifying cancellation to backend:', error);
       }
 
       this.uploadSessions.delete(sessionId);

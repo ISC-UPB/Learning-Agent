@@ -7,44 +7,41 @@ import type {
 import type { DocumentChunkRepositoryPort } from '../ports/document-chunk-repository.port';
 
 /**
- * Opciones para el procesamiento de chunks
+ * Options for chunk processing
  */
 export interface ProcessChunksOptions {
-  /** Configuración personalizada de chunking */
+  /** Custom chunking configuration */
   chunkingConfig?: Partial<ChunkingConfig>;
 
-  /** Si debe reemplazar chunks existentes */
+  /** Whether to replace existing chunks */
   replaceExisting?: boolean;
 
-  /** Tipo de chunk personalizado */
+  /** Custom chunk type */
   chunkType?: string;
 }
 
 /**
- * Resultado del procesamiento completo de chunks
+ * Complete chunk processing result
  */
 export interface ProcessChunksResult {
-  /** Resultado del chunking */
+  /** Chunking result */
   chunkingResult: ChunkingResult;
 
-  /** Chunks guardados en la base de datos */
+  /** Chunks saved in database */
   savedChunks: DocumentChunk[];
 
-  /** Tiempo de procesamiento en milisegundos */
+  /** Processing time in milliseconds */
   processingTimeMs: number;
 
-  /** Estado del procesamiento */
+  /** Processing status */
   status: 'success' | 'partial_success' | 'error';
 
-  /** Mensajes de error si los hay */
+  /** Error messages if any */
   errors?: string[];
 }
 
 /**
- * Servicio de dominio para el chunking de documentos
- *
- * Coordina el proceso completo de división de texto en chunks
- * y su almacenamiento en el repositorio.
+ * Domain service for document chunking
  */
 export class DocumentChunkingService {
   constructor(
@@ -53,11 +50,7 @@ export class DocumentChunkingService {
   ) {}
 
   /**
-   * Procesa un documento completo: chunking + almacenamiento
-   *
-   * @param documentId - ID del documento a procesar
-   * @param extractedText - Texto extraído del documento
-   * @param options - Opciones de procesamiento
+   * Processes complete document: chunking + storage
    */
   async processDocumentChunks(
     documentId: string,
@@ -68,24 +61,20 @@ export class DocumentChunkingService {
     const errors: string[] = [];
 
     try {
-      // 1. Validar entrada
       if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error('No hay texto para procesar');
+        throw new Error('No text to process');
       }
 
-      // 2. Preparar configuración de chunking
       const defaultConfig = this.chunkingStrategy.getDefaultConfig();
       const chunkingConfig: ChunkingConfig = {
         ...defaultConfig,
         ...options.chunkingConfig,
       };
 
-      // Validar configuración
       if (!this.chunkingStrategy.validateConfig(chunkingConfig)) {
-        throw new Error('Configuración de chunking inválida');
+        throw new Error('Invalid chunking configuration');
       }
 
-      // 3. Eliminar chunks existentes si se solicita reemplazo
       if (options.replaceExisting) {
         const hasExistingChunks =
           await this.chunkRepository.existsByDocumentId(documentId);
@@ -93,8 +82,6 @@ export class DocumentChunkingService {
           await this.chunkRepository.deleteByDocumentId(documentId);
         }
       }
-
-      // 4. Realizar chunking
       const chunkingResult = await this.chunkingStrategy.chunkText(
         documentId,
         extractedText,
@@ -102,17 +89,14 @@ export class DocumentChunkingService {
       );
 
       if (chunkingResult.chunks.length === 0) {
-        throw new Error('No se pudieron generar chunks del texto');
+        throw new Error('Could not generate chunks from text');
       }
-
-      // 5. Aplicar tipo personalizado si se especifica
       if (options.chunkType) {
         chunkingResult.chunks.forEach((chunk) => {
           chunk.type = options.chunkType!;
         });
       }
 
-      // 6. Guardar chunks en el repositorio
       const savedChunks = await this.chunkRepository.saveMany(
         chunkingResult.chunks,
       );
@@ -127,7 +111,7 @@ export class DocumentChunkingService {
       };
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : 'Error desconocido';
+        error instanceof Error ? error.message : 'Unknown error';
       errors.push(errorMessage);
 
       const processingTimeMs = Date.now() - startTime;
@@ -152,7 +136,7 @@ export class DocumentChunkingService {
   }
 
   /**
-   * Obtiene los chunks de un documento con estadísticas
+   * Gets document chunks with statistics
    */
   async getDocumentChunks(documentId: string) {
     const chunks = await this.chunkRepository.findByDocumentId(documentId);
@@ -167,15 +151,14 @@ export class DocumentChunkingService {
   }
 
   /**
-   * Verifica si un documento tiene chunks procesados
+   * Checks if document has processed chunks
    */
   async hasProcessedChunks(documentId: string): Promise<boolean> {
     return this.chunkRepository.existsByDocumentId(documentId);
   }
 
   /**
-   * Re-procesa los chunks de un documento
-   * (útil cuando cambia la estrategia o configuración)
+   * Re-processes document chunks
    */
   async reprocessDocumentChunks(
     documentId: string,

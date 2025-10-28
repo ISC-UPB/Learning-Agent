@@ -14,14 +14,22 @@ describe('LoginUseCase', () => {
   let hasher: any;
   let tokenService: any;
   let sessionRepo: any;
+  let tokenExpiration: any;
+  let config: any;
 
   beforeEach(() => {
     userRepo = { findByEmail: jest.fn() };
     hasher = { compare: jest.fn() };
     tokenService = { signAccess: jest.fn(), signRefresh: jest.fn() };
     sessionRepo = { revokeAll: jest.fn(), createSession: jest.fn() };
+    tokenExpiration = { 
+      calculateExpiration: jest.fn().mockReturnValue({ expiresAt: new Date() }) 
+    };
+    config = {
+      getJwtRefreshTTL: jest.fn().mockReturnValue('7d'),
+    };
 
-    useCase = new LoginUseCase(userRepo, hasher, tokenService, sessionRepo);
+    useCase = new LoginUseCase(userRepo, hasher, tokenService, sessionRepo, tokenExpiration, config);
 
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});

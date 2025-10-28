@@ -16,7 +16,7 @@ export class ContextualLoggerService {
   private context: LogContext = {};
 
   constructor(@Inject(REQUEST) private request: LoggingRequest) {
-    // Extraer requestId del request
+    // Extract the requestId from the request
     this.context.requestId = this.request.requestId;
   }
 
@@ -24,15 +24,18 @@ export class ContextualLoggerService {
     this.context = { ...this.context, ...context };
   }
 
-  private formatMessage(message: string, additionalContext?: Record<string, any>) {
+  private formatMessage(
+    message: string,
+    additionalContext?: Record<string, any>,
+  ) {
     const fullContext = {
       ...this.context,
       ...additionalContext,
       timestamp: new Date().toISOString(),
     };
 
-    const contextStr = this.context.requestId 
-      ? `[${this.context.requestId}]` 
+    const contextStr = this.context.requestId
+      ? `[${this.context.requestId}]`
       : '';
 
     return {
@@ -46,14 +49,21 @@ export class ContextualLoggerService {
     this.logger.log(formatted.message, formatted.context);
   }
 
-  error(message: string, error?: Error | string, context?: Record<string, any>) {
+  error(
+    message: string,
+    error?: Error | string,
+    context?: Record<string, any>,
+  ) {
     const formatted = this.formatMessage(message, {
       ...context,
-      error: error instanceof Error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      } : error,
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : error,
     });
     this.logger.error(formatted.message, formatted.context);
   }
@@ -73,18 +83,18 @@ export class ContextualLoggerService {
     this.logger.verbose(formatted.message, formatted.context);
   }
 
-  // Métodos específicos para el dominio de documentos
+  // Methods specific to the domain of documents
   logDocumentOperation(
     operation: 'upload' | 'download' | 'delete' | 'process' | 'list',
     documentId?: string,
-    additionalContext?: Record<string, any>
+    additionalContext?: Record<string, any>,
   ) {
     this.setContext({
       action: operation,
       resource: 'document',
       metadata: { documentId, ...additionalContext },
     });
-    
+
     this.log(`Document ${operation} operation`, {
       documentId,
       ...additionalContext,

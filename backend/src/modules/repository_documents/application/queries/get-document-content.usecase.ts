@@ -25,26 +25,23 @@ export class GetDocumentContentUseCase {
     const { docId } = request;
 
     try {
-      // Buscar el documento por ID
       const document = await this.documentRepository.findById(docId);
 
       if (!document) {
-        throw new Error(`Documento con ID ${docId} no encontrado`);
+        throw new Error(`Document with ID ${docId} not found`);
       }
 
-      // Verificar que el documento tenga texto extraído
       if (!document.extractedText) {
         throw new Error(
-          `El documento ${docId} no tiene contenido de texto extraído`,
+          `Document ${docId} has no extracted text content`,
         );
       }
 
-      // Construir la respuesta con el contenido y metadata
       const response: GetDocumentContentResponse = {
         contenido: document.extractedText,
         metadata: {
-          paginas: document.pageCount || undefined,
-          resumen: undefined, // Por ahora no generamos resúmenes automáticos
+          paginas: document.pageCount || 0,
+          resumen: 'Summary not available',
         },
       };
 
@@ -53,7 +50,7 @@ export class GetDocumentContentUseCase {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       throw new Error(
-        `Error al obtener contenido del documento ${docId}: ${errorMessage}`,
+        `Error getting document content ${docId}: ${errorMessage}`,
       );
     }
   }

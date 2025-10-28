@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../core/prisma/prisma.module';
-import { CLASSES_REPO, COURSE_REPO, ENROLLMENT_REPO, TEACHER_REPO, STUDENT_REPO } from './tokens';
+import { CLASSES_REPO, COURSE_REPO, ENROLLMENT_REPO, TEACHER_REPO, STUDENT_REPO, ATTENDANCE_REPO } from './tokens';
 import { CreateClassUseCase } from './application/commands/create-class.usecase';
 import { CreateStudentUseCase } from './application/commands/create-student.usecase';
 import { CreateStudentProfileUseCase } from './application/commands/create-student-profile.usecase';
@@ -24,20 +24,38 @@ import { IdentityModule } from '../identity/identity.module';
 import { CoursePrismaRepository } from './infrastructure/persistence/course.prisma.repository';
 import { CreateCourseUseCase } from './application/commands/create-course.usecase';
 import { SoftDeleteSingleEnrollmentUseCase } from './application/commands/soft-delete-single-enrollment.useCase';
+import { SaveAttendanceGroupStudentUseCase } from './application/commands/save-attendance-group-student-usecase';
 import { GetCoursesByTeacherUseCase } from './application/queries/get-courses-by-teacher.usecase';
+import { getDateAbsencesBystudentUseCase } from './application/queries/get-date-absences-by-student.usecase.ts';
 import { GetClassesByCourseUseCase } from './application/queries/get-classes-by-course.usecase';
+import { GetAbsencesByClass } from './application/queries/get-absences-by-class';
 import { GetCourseByIdUseCase } from './application/queries/get-course-by-id.usecase';
 import { RbacModule } from '../rbac/rbac.module';
+import { AttendancePrismaRepository } from './infrastructure/persistence/attendance.prisma.repository';
+
+// Importamos los adaptadores locales
+import { UserServiceAdapter } from './infrastructure/adapters/user.service.adapter';
+import { RoleServiceAdapter } from './infrastructure/adapters/role.service.adapter';
+import { HasherAdapter } from './infrastructure/adapters/hasher.adapter';
 
 @Module({
   imports: [PrismaModule, IdentityModule, RbacModule],
   controllers: [AcademicManagementController],
   providers: [
-    {provide: CLASSES_REPO,  useClass: ClassesPrismaRepository }  ,
-    {provide: COURSE_REPO, useClass: CoursePrismaRepository},
-    {provide: STUDENT_REPO,  useClass: StudentPrismaRepository}  ,
-    {provide: TEACHER_REPO, useClass: TeacherPrismaRepository},
-    {provide: ENROLLMENT_REPO, useClass: EnrollmentPrismaRepository},
+    { provide: CLASSES_REPO, useClass: ClassesPrismaRepository },
+    { provide: COURSE_REPO, useClass: CoursePrismaRepository },
+    { provide: STUDENT_REPO, useClass: StudentPrismaRepository },
+    { provide: TEACHER_REPO, useClass: TeacherPrismaRepository },
+    { provide: ENROLLMENT_REPO, useClass: EnrollmentPrismaRepository },
+    { provide: ATTENDANCE_REPO, useClass: AttendancePrismaRepository },
+
+    // Adaptadores para los puertos locales
+    { provide: 'UserServicePort', useClass: UserServiceAdapter },
+    { provide: 'RoleServicePort', useClass: RoleServiceAdapter },
+    { provide: 'HasherPort', useClass: HasherAdapter },
+    { provide: 'StudentRepositoryPort', useClass: StudentPrismaRepository },
+
+    // Casos de uso
     ListClassesUseCase,
     ListStudentsUseCase,
     GetCourseByIdUseCase,
@@ -57,6 +75,9 @@ import { RbacModule } from '../rbac/rbac.module';
     EnrollGroupStudentUseCase,
     UpdateClassUseCase,
     SoftDeleteClassUseCase,
+    SaveAttendanceGroupStudentUseCase,
+    GetAbsencesByClass,
+    getDateAbsencesBystudentUseCase,
   ],
 })
 export class AcademicManagementModule {}

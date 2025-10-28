@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { DocumentRepositoryPort } from '../../domain/ports/document-repository.port';
 import type { DocumentStoragePort } from '../../domain/ports/document-storage.port';
 import { ContractDocumentListItem } from '../../domain/entities/contract-document-list-item';
 
 export interface GetDocumentsBySubjectRequest {
-  materiaId: string;
+  subjectId: string;
   tipo?: string;
   page?: number;
   limit?: number;
@@ -18,6 +18,8 @@ export interface GetDocumentsBySubjectResponse {
 
 @Injectable()
 export class GetDocumentsBySubjectUseCase {
+  private readonly logger = new Logger(GetDocumentsBySubjectUseCase.name);
+
   constructor(
     private readonly documentRepository: DocumentRepositoryPort,
     private readonly documentStorage: DocumentStoragePort,
@@ -26,38 +28,34 @@ export class GetDocumentsBySubjectUseCase {
   async execute(
     request: GetDocumentsBySubjectRequest,
   ): Promise<GetDocumentsBySubjectResponse> {
-    const { materiaId, tipo, page = 1, limit = 10 } = request;
-
-    // Calcular offset para paginación
+    const { subjectId, tipo, page = 1, limit = 10 } = request;
     const offset = (page - 1) * limit;
 
     try {
-      // Obtener documentos de la base de datos filtrados por curso
       const dbDocuments = await this.documentRepository.findByCourseId(
-        materiaId,
+        subjectId,
         offset,
         limit,
         tipo,
       );
 
-      // Obtener el total de documentos para la materia
       const total = await this.documentRepository.countByCourseId(
-        materiaId,
+        subjectId,
         tipo,
       );
 
-      // Crear ContractDocumentListItem con datos correctos
+      // Create ContractDocumentListItem with correct data
       const documents: ContractDocumentListItem[] = [];
 
       for (const doc of dbDocuments) {
         try {
-          // Verificar que el archivo existe en el storage
+          // Check if the file exists in storage
           const exists = await this.documentStorage.documentExists(
             doc.fileName,
           );
           if (!exists) continue;
 
-          // Generar URL de descarga
+          // Generate download URL
           const downloadUrl = await this.documentStorage.generateDownloadUrl(
             doc.fileName,
           );
@@ -75,8 +73,8 @@ export class GetDocumentsBySubjectUseCase {
             ),
           );
         } catch (error) {
-          // Si hay error con un documento específico, lo omitimos pero continuamos
-          console.warn(
+          // if there's an error with a specific document, we skip it but continue
+          this.logger.warn(
             `Error processing document ${doc.id}: ${error instanceof Error ? error.message : 'Unknown error'}`,
           );
           continue;
@@ -92,7 +90,7 @@ export class GetDocumentsBySubjectUseCase {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       throw new Error(
-        `Error al obtener documentos de la materia ${materiaId}: ${errorMessage}`,
+        `Error getting documents for subject ${subjectId}: ${errorMessage}`,
       );
     }
   }

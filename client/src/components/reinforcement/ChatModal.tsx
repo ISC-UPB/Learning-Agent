@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Input, Button, Typography, theme } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import { useChatLogic } from '../../hooks/useChatLogic';
+import { useChatLogic } from '../../hooks/useReinforcementData';
 
 interface ChatModalProps {
   isChatOpen: boolean;

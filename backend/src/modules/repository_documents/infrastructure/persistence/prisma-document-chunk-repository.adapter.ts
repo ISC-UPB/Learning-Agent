@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../core/prisma/prisma.service';
 import { DocumentChunk } from '../../domain/entities/document-chunk.entity';
+import { DocumentChunkService } from '../../domain/services/document-chunk.service';
 import type {
   DocumentChunkRepositoryPort,
   FindChunksResult,
@@ -9,8 +10,8 @@ import type {
 import * as crypto from 'crypto';
 
 /**
- * Adaptador de repositorio para DocumentChunk usando Prisma
- * Implementa idempotencia y deduplicación por hash de contenido
+ * Repository adapter for DocumentChunk using Prisma.
+ * Implements idempotency and content-hash deduplication.
  */
 @Injectable()
 export class PrismaDocumentChunkRepositoryAdapter
@@ -23,14 +24,14 @@ export class PrismaDocumentChunkRepositoryAdapter
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Genera un hash SHA-256 único para el contenido del chunk
+   * Generates a unique SHA-256 hash for the chunk content.
    */
   private generateChunkHash(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex');
   }
 
   /**
-   * Guarda un chunk en la base de datos (con deduplicación por hash)
+   * Saves a chunk to the database (with deduplication by hash).
    */
   async save(chunk: DocumentChunk): Promise<DocumentChunk> {
     const chunkHash = this.generateChunkHash(chunk.content);
@@ -55,7 +56,7 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       return this.mapToEntity(savedChunk);
     } catch (error: any) {
-      // Prisma error de duplicado (P2002)
+      //Handles Prisma duplicate error (P2002).
       if (error.code === 'P2002') {
         this.logger.warn(
           `Chunk duplicado detectado para documentId=${chunk.documentId} (hash=${chunkHash})`,
@@ -72,7 +73,7 @@ export class PrismaDocumentChunkRepositoryAdapter
   }
 
   /**
-   * Guarda múltiples chunks en una transacción (con deduplicación)
+   * Saves multiple chunks in a transaction (with deduplication).
    */
   async saveMany(chunks: DocumentChunk[]): Promise<DocumentChunk[]> {
     if (chunks.length === 0) return [];
@@ -95,7 +96,7 @@ export class PrismaDocumentChunkRepositoryAdapter
         createdAt: chunk.createdAt,
       }));
 
-      // Inserta en lote, omitiendo duplicados por (documentId, chunkHash)
+      //Performs batch insertion, skipping duplicates based on (documentId, chunkHash).
       const result = await this.prisma.documentChunk.createMany({
         data,
         skipDuplicates: true,
@@ -105,7 +106,7 @@ export class PrismaDocumentChunkRepositoryAdapter
         `Chunks insertados: ${result.count} (duplicados omitidos automáticamente)`,
       );
 
-      // Retorna todos los chunks actuales del documento
+      //Returns all current chunks of the document.
       const allChunks = await this.prisma.documentChunk.findMany({
         where: { documentId: chunks[0].documentId },
         orderBy: { chunkIndex: 'asc' },
@@ -113,13 +114,13 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       return allChunks.map((chunk) => this.mapToEntity(chunk));
     } catch (error) {
-      this.logger.error(`Error guardando ${chunks.length} chunks:`, error);
-      throw new Error(`Error guardando chunks en lote: ${error}`);
+      this.logger.error(`Error saving ${chunks.length} chunks:`, error);
+      throw new Error(`Error saving chunks in batch: ${error}`);
     }
   }
 
   /**
-   * Busca un chunk por su ID
+   * Find a chunk by its ID
    */
   async findById(id: string): Promise<DocumentChunk | null> {
     try {
@@ -129,13 +130,13 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       return chunk ? this.mapToEntity(chunk) : null;
     } catch (error) {
-      this.logger.error(`Error buscando chunk ${id}:`, error);
-      throw new Error(`Error buscando chunk: ${error}`);
+      this.logger.error(`Error finding chunk ${id}:`, error);
+      throw new Error(`Error finding chunk: ${error}`);
     }
   }
 
   /**
-   * Busca todos los chunks de un documento específico
+   * Find all chunks belonging to a specific document.
    */
   async findByDocumentId(
     documentId: string,
@@ -151,13 +152,13 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       const [chunks, total] = await Promise.all([
         this.prisma.documentChunk.findMany({
-          where: { documentId },
+          where: { documentId, isActive: true },
           orderBy: { [orderBy]: orderDirection },
           take: limit,
           skip: offset,
         }),
         this.prisma.documentChunk.count({
-          where: { documentId },
+          where: { documentId, isActive: true },
         }),
       ]);
 
@@ -167,15 +168,15 @@ export class PrismaDocumentChunkRepositoryAdapter
       };
     } catch (error) {
       this.logger.error(
-        `Error buscando chunks del documento ${documentId}:`,
+        `Error finding chunks of document ${documentId}:`,
         error,
       );
-      throw new Error(`Error buscando chunks del documento: ${error}`);
+      throw new Error(`Error finding chunks of document: ${error}`);
     }
   }
 
   /**
-   * Busca chunks por tipo
+   * Find chunks by type.
    */
   async findByType(
     type: string,
@@ -191,13 +192,13 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       const [chunks, total] = await Promise.all([
         this.prisma.documentChunk.findMany({
-          where: { type: type },
+          where: { type: type, isActive: true },
           orderBy: { [orderBy]: orderDirection },
           take: limit,
           skip: offset,
         }),
         this.prisma.documentChunk.count({
-          where: { type: type },
+          where: { type: type, isActive: true },
         }),
       ]);
 
@@ -206,13 +207,13 @@ export class PrismaDocumentChunkRepositoryAdapter
         total,
       };
     } catch (error) {
-      this.logger.error(`Error buscando chunks del tipo ${type}:`, error);
-      throw new Error(`Error buscando chunks por tipo: ${error}`);
+      this.logger.error(`Error finding chunks of type ${type}:`, error);
+      throw new Error(`Error finding chunks of type: ${error}`);
     }
   }
 
   /**
-   * Elimina todos los chunks de un documento
+   * Delete all chunks of a document
    */
   async deleteByDocumentId(documentId: string): Promise<void> {
     try {
@@ -221,63 +222,118 @@ export class PrismaDocumentChunkRepositoryAdapter
       });
 
       this.logger.log(
-        `Eliminados ${result.count} chunks del documento ${documentId}`,
+        `Deleted ${result.count} chunks of document ${documentId}`,
       );
     } catch (error) {
       this.logger.error(
-        `Error eliminando chunks del documento ${documentId}:`,
+        `Error deleting chunks of document ${documentId}:`,
         error,
       );
-      throw new Error(`Error eliminando chunks del documento: ${error}`);
+      throw new Error(`Error deleting chunks of document: ${error}`);
     }
   }
 
   /**
-   * Elimina un chunk específico
+   * Mark all chunks of a document as deleted (soft delete)
+   */
+  async softDeleteByDocumentId(documentId: string): Promise<void> {
+    try {
+      const result = await this.prisma.documentChunk.updateMany({
+        where: {
+          documentId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Marked as deleted ${result.count} chunks of document ${documentId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error marking chunks as deleted of document ${documentId}:`,
+        error,
+      );
+      throw new Error(`Error marking chunks as deleted of document: ${error}`);
+    }
+  }
+
+  /**
+   * Restore all deleted chunks of a document
+   */
+  async restoreByDocumentId(documentId: string): Promise<void> {
+    try {
+      const result = await this.prisma.documentChunk.updateMany({
+        where: {
+          documentId,
+          isActive: false,
+        },
+        data: {
+          isActive: true,
+          updatedAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Restored ${result.count} chunks of document ${documentId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error restoring chunks of document ${documentId}:`,
+        error,
+      );
+      throw new Error(`Error restoring chunks: ${error}`);
+    }
+  }
+
+  /**
+   * Delete a specific chunk
    */
   async deleteById(id: string): Promise<void> {
     try {
       await this.prisma.documentChunk.delete({
         where: { id },
       });
-
     } catch (error) {
-      this.logger.error(`Error eliminando chunk ${id}:`, error);
-      throw new Error(`Error eliminando chunk: ${error}`);
+      this.logger.error(`Error deleting chunk ${id}:`, error);
+      throw new Error(`Error deleting chunk: ${error}`);
     }
   }
 
   /**
-   * Cuenta el número total de chunks de un documento
+   * Count the total number of chunks of a document
    */
   async countByDocumentId(documentId: string): Promise<number> {
     try {
       return await this.prisma.documentChunk.count({
-        where: { documentId },
+        where: { documentId, isActive: true },
       });
     } catch (error) {
       this.logger.error(
-        `Error contando chunks del documento ${documentId}:`,
+        `Error counting chunks of document ${documentId}:`,
         error,
       );
-      throw new Error(`Error contando chunks: ${error}`);
+      throw new Error(`Error counting chunks: ${error}`);
     }
   }
 
   /**
-   * Verifica si existen chunks para un documento
+   * Check if there are chunks for a document
    */
   async existsByDocumentId(documentId: string): Promise<boolean> {
     try {
       const count = await this.prisma.documentChunk.count({
-        where: { documentId },
-        take: 1, // Solo necesitamos saber si existe al menos uno
+        where: { documentId, isActive: true },
+        take: 1,
       });
 
       return count > 0;
     } catch (error) {
       this.logger.error(
-        `Error verificando chunks del documento ${documentId}:`,
+        `Error checking chunks of document ${documentId}:`,
         error,
       );
       return false;
@@ -285,7 +341,7 @@ export class PrismaDocumentChunkRepositoryAdapter
   }
 
   /**
-   * Obtiene estadísticas de chunks para un documento
+   * Get statistics of chunks for a document
    */
   async getDocumentChunkStatistics(documentId: string): Promise<{
     totalChunks: number;
@@ -295,7 +351,6 @@ export class PrismaDocumentChunkRepositoryAdapter
     totalContentLength: number;
   }> {
     try {
-      // Query raw para obtener todas las estadísticas de una vez
       const contentStats = await this.prisma.$queryRaw<
         Array<{
           total_chunks: number;
@@ -326,11 +381,10 @@ export class PrismaDocumentChunkRepositoryAdapter
       };
     } catch (error) {
       this.logger.error(
-        `Error obteniendo estadísticas del documento ${documentId}:`,
+        `Error getting statistics of document ${documentId}:`,
         error,
       );
 
-      // Fallback: estadísticas básicas
       const count = await this.countByDocumentId(documentId);
       return {
         totalChunks: count,
@@ -342,35 +396,31 @@ export class PrismaDocumentChunkRepositoryAdapter
     }
   }
 
-  // ============ MÉTODOS PARA EMBEDDINGS ============
+  // ============ METHODS FOR EMBEDDINGS ============
 
   /**
-   * Actualiza el embedding de un chunk específico
+   * Update the embedding of a specific chunk
    */
   async updateChunkEmbedding(
     chunkId: string,
     embedding: number[],
   ): Promise<void> {
     try {
-      // Usar $queryRaw para manejar el tipo vector
+      // Use $queryRaw to handle the vector data type.
       await this.prisma.$queryRaw`
         UPDATE "document_chunks" 
         SET embedding = ${JSON.stringify(embedding)}::vector, 
             "updatedAt" = NOW()
         WHERE id = ${chunkId}
       `;
-
     } catch (error) {
-      this.logger.error(
-        `Error actualizando embedding del chunk ${chunkId}:`,
-        error,
-      );
-      throw new Error(`Error actualizando embedding: ${error}`);
+      this.logger.error(`Error updating embedding of chunk ${chunkId}:`, error);
+      throw new Error(`Error updating embedding: ${error}`);
     }
   }
 
   /**
-   * Actualiza embeddings de múltiples chunks en lote (más eficiente)
+   * Update embeddings of multiple chunks in batch (more efficient)
    */
   async updateBatchEmbeddings(
     updates: Array<{ chunkId: string; embedding: number[] }>,
@@ -380,9 +430,9 @@ export class PrismaDocumentChunkRepositoryAdapter
     }
 
     try {
-      this.logger.log(`Actualizando ${updates.length} embeddings en lote...`);
+      this.logger.log(`Updating ${updates.length} embeddings in batch...`);
 
-      // Usar transacción con $queryRaw para manejar el tipo vector
+      // Use transaction with $queryRaw to handle the vector data type
       await this.prisma.$transaction(
         updates.map(
           ({ chunkId, embedding }) =>
@@ -395,18 +445,15 @@ export class PrismaDocumentChunkRepositoryAdapter
         ),
       );
 
-      this.logger.log(`${updates.length} embeddings actualizados exitosamente`);
+      this.logger.log(`${updates.length} embeddings updated successfully`);
     } catch (error) {
-      this.logger.error(
-        `Error actualizando ${updates.length} embeddings:`,
-        error,
-      );
-      throw new Error(`Error actualizando embeddings en lote: ${error}`);
+      this.logger.error(`Error updating ${updates.length} embeddings:`, error);
+      throw new Error(`Error updating embeddings in batch: ${error}`);
     }
   }
 
   /**
-   * Verifica si un chunk tiene embedding generado
+   * Check if a chunk has an embedding generated
    */
   async hasEmbedding(chunkId: string): Promise<boolean> {
     try {
@@ -420,16 +467,13 @@ export class PrismaDocumentChunkRepositoryAdapter
 
       return result[0]?.has_embedding || false;
     } catch (error) {
-      this.logger.error(
-        `Error verificando embedding del chunk ${chunkId}:`,
-        error,
-      );
+      this.logger.error(`Error checking embedding of chunk ${chunkId}:`, error);
       return false;
     }
   }
 
   /**
-   * Busca chunks que no tienen embeddings generados para un documento
+   * Find chunks that do not have embeddings generated for a document
    */
   async findChunksWithoutEmbeddings(
     documentId: string,
@@ -438,7 +482,7 @@ export class PrismaDocumentChunkRepositoryAdapter
     try {
       const { limit = 50, offset = 0 } = options;
 
-      // Usar consulta SQL directa para evitar problemas con el tipo vector
+      // Use a direct SQL query to avoid problems with the vector data type.
       const chunks = await this.prisma.$queryRaw<
         Array<{
           id: string;
@@ -471,21 +515,18 @@ export class PrismaDocumentChunkRepositoryAdapter
         total,
       };
     } catch (error) {
-      this.logger.error(
-        `Error buscando chunks sin embeddings del documento ${documentId}:`,
-        error,
-      );
-      throw new Error(`Error buscando chunks sin embeddings: ${error}`);
+      this.logger.error(`Error finding chunks without embeddings:`, error);
+      throw new Error(`Error finding chunks without embeddings: ${error}`);
     }
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  // ============ PRIVATE METHODS ============
 
   /**
-   * Mapea el resultado de Prisma a la entidad de dominio
+   * Maps the result of Prisma to the domain entity
    */
   private mapToEntity(prismaChunk: any): DocumentChunk {
-    return DocumentChunk.create(
+    return new DocumentChunk(
       prismaChunk.id,
       prismaChunk.documentId,
       prismaChunk.content,
@@ -493,11 +534,12 @@ export class PrismaDocumentChunkRepositoryAdapter
       prismaChunk.type,
       prismaChunk.metadata || {},
       prismaChunk.createdAt,
+      prismaChunk.updatedAt,
     );
   }
 
   /**
-   * Mapea el tipo string de la entidad al enum ChunkType de Prisma
+   * Maps the string type of the entity to the enum ChunkType of Prisma
    */
   private mapTypeToChunkType(type: string): any {
     const typeMap: Record<string, any> = {
@@ -517,14 +559,14 @@ export class PrismaDocumentChunkRepositoryAdapter
   }
 
   /**
-   * Cuenta el número de palabras en un texto
+   * Counts the number of words in a text
    */
   private countWords(text: string): number {
     if (!text || text.trim().length === 0) {
       return 0;
     }
 
-    // Dividir por espacios y filtrar elementos vacíos
+    // Split by spaces and filter empty elements
     return text
       .trim()
       .split(/\s+/)

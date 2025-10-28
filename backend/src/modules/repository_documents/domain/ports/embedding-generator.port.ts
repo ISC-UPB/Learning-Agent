@@ -1,78 +1,78 @@
 /**
- * Resultado de generación de embeddings
+ * Result of embedding generation
  */
 export interface EmbeddingResult {
-  /** Vector de embeddings generado */
+  /** Generated embedding vector */
   embedding: number[];
 
-  /** Dimensiones del vector */
+  /** Vector dimensions */
   dimensions: number;
 
-  /** Modelo utilizado para generar el embedding */
+  /** Model used to generate the embedding */
   model: string;
 
-  /** Número de tokens procesados */
+  /** Number of tokens processed */
   tokensUsed: number;
 
-  /** Tiempo de procesamiento en milisegundos */
+  /** Processing time in milliseconds */
   processingTimeMs?: number;
 }
 
 /**
- * Resultado de generación de embeddings en lote
+ * Result of batch embedding generation
  */
 export interface BatchEmbeddingResult {
-  /** Vectores de embeddings generados */
+  /** Generated embedding vectors */
   embeddings: number[][];
 
-  /** Número total de embeddings generados */
+  /** Total number of embeddings generated */
   totalEmbeddings: number;
 
-  /** Dimensiones de cada vector */
+  /** Vector dimensions */
   dimensions: number;
 
-  /** Tokens totales utilizados */
+  /** Total tokens used */
   totalTokensUsed: number;
 
-  /** Modelo utilizado */
+  /** Model used */
   model: string;
 
-  /** Número de embeddings exitosos */
+  /** Number of successful embeddings */
   successfulCount: number;
 
-  /** Número de embeddings que fallaron */
+  /** Number of failed embeddings */
   failedCount: number;
 
-  /** Lista de errores encontrados */
+  /** List of errors found */
   errors: string[];
 }
 
 /**
- * Configuración para generación de embeddings
+ * Configuration for embedding generation
  */
 export interface EmbeddingConfig {
-  /** Modelo a utilizar (ej: text-embedding-3-small, text-embedding-3-large) */
+  /** Model to use (e.g: text-embedding-3-small, text-embedding-3-large) */
   model: string;
 
-  /** Dimensiones del vector resultante (opcional, depende del modelo) */
+  /** Vector dimensions (optional, depends on the model) */
   dimensions: number;
 
-  /** Configuración adicional específica del proveedor */
+  /** Additional provider-specific configuration */
   additionalConfig?: Record<string, any>;
 }
 
 /**
- * Puerto para generación de embeddings
+ * Embedding generator port
  *
- * Abstrae diferentes proveedores de embeddings (OpenAI, Hugging Face, etc.)
+ * Abstracts different embedding providers (OpenAI, Hugging Face, etc.)
  */
 export interface EmbeddingGeneratorPort {
   /**
-   * Genera embedding para un solo texto
+   * Generates embedding for a single text
    *
-   * @param text - Texto a procesar
-   * @param config - Configuración opcional
-   * @returns Resultado con el vector de embeddings
+   * @param text - Text to process
+   * @param config - Optional configuration
+   * @returns Result with the embedding vector
    */
   generateEmbedding(
     text: string,
@@ -80,11 +80,11 @@ export interface EmbeddingGeneratorPort {
   ): Promise<EmbeddingResult>;
 
   /**
-   * Genera embeddings para múltiples textos en lote (más eficiente)
+   * Generates embeddings for multiple texts in batch (more efficient)
    *
-   * @param texts - Array de textos a procesar
-   * @param config - Configuración opcional
-   * @returns Resultados del lote completo
+   * @param texts - Array of texts to process
+   * @param config - Optional configuration
+   * @returns Complete batch results
    */
   generateBatchEmbeddings(
     texts: string[],
@@ -92,20 +92,20 @@ export interface EmbeddingGeneratorPort {
   ): Promise<BatchEmbeddingResult>;
 
   /**
-   * Valida que un texto sea apropiado para generar embeddings
+   * Validates that a text is appropriate for generating embeddings
    *
-   * @param text - Texto a validar
-   * @returns true si es válido, false en caso contrario
+   * @param text - Text to validate
+   * @returns true if valid, false otherwise
    */
   validateText(text: string): boolean;
 
   /**
-   * Obtiene la configuración por defecto del generador
+   * Gets the default configuration of the generator
    */
   getDefaultConfig(): EmbeddingConfig;
 
   /**
-   * Obtiene información sobre el modelo utilizado
+   * Gets information about the model used
    */
   getModelInfo(): {
     name: string;

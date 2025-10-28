@@ -1,48 +1,60 @@
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, MaxLength, ValidateNested, Min } from 'class-validator';
+
+import {
+  IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID,
+  Max, MaxLength, Min, ValidateNested
+} from 'class-validator';
+
 import { Type } from 'class-transformer';
 
-class DistributionDto {
-  @IsInt() @Min(0, { message: 'multiple_choice debe ser ≥ 0.' })
-  multiple_choice!: number;
-
-  @IsInt() @Min(0, { message: 'true_false debe ser ≥ 0.' })
-  true_false!: number;
-
-  @IsInt() @Min(0, { message: 'open_analysis debe ser ≥ 0.' })
-  open_analysis!: number;
-
-  @IsInt() @Min(0, { message: 'open_exercise debe ser ≥ 0.' })
-  open_exercise!: number;
+class DistributionDTO {
+  @IsOptional() @IsInt() @Min(0) @Max(999) multiple_choice!: number;
+  @IsOptional() @IsInt() @Min(0) @Max(999) true_false!: number;
+  @IsOptional() @IsInt() @Min(0) @Max(999) open_analysis!: number;
+  @IsOptional() @IsInt() @Min(0) @Max(999) open_exercise!: number;
 }
 
 export class CreateExamDto {
+
+  @IsString({ message: 'title debe ser texto' })
+  @IsNotEmpty({ message: 'title es obligatorio' })
+  @MaxLength(120)
+  title!: string;
+
+  @IsUUID('4', { message: 'classId debe ser UUID v4' })
+
+  classId!: string;
+
   @IsString()
-  @IsNotEmpty({ message: 'Materia es obligatoria.' })
+  @IsNotEmpty({ message: 'subject es obligatorio' })
   @MaxLength(200)
   subject!: string;
 
   @IsString()
-  @IsIn(['fácil', 'medio', 'difícil'], { message: 'Dificultad inválida.' })
-  difficulty!: 'fácil' | 'medio' | 'difícil';
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  reference?: string;
+  @IsNotEmpty({ message: 'difficulty es obligatorio' })
+  difficulty!: string;
 
   @IsInt()
-  @IsPositive({ message: 'Intentos debe ser > 0.' })
+  @Min(1) @Max(10)
   attempts!: number;
 
   @IsInt()
-  @IsPositive({ message: 'Total de preguntas debe ser > 0.' })
+  @Min(1) @Max(1000)
   totalQuestions!: number;
 
   @IsInt()
-  @IsPositive({ message: 'Tiempo (minutos) debe ser > 0.' })
+  @Min(45, { message: 'Mínimo 45 minutos' })
+  @Max(240, { message: 'Máximo 240 minutos' })
   timeMinutes!: number;
 
-  @ValidateNested()
-  @Type(() => DistributionDto)
-  distribution!: DistributionDto;
+  @IsOptional() @IsString() @MaxLength(2000)
+  reference?: string | null;
+
+  @IsOptional() @ValidateNested() @Type(() => DistributionDTO)
+  distribution?: DistributionDTO;
+
+  @IsOptional()
+  @IsEnum(['Guardado', 'Publicado'] as const, {
+    message: 'status debe ser Guardado o Publicado'
+  })
+  status?: 'Guardado' | 'Publicado';
 }

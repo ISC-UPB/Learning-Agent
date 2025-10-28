@@ -14,7 +14,15 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
 
   async save(document: Document): Promise<Document> {
     try {
-      // Usar upsert para manejar casos donde el documento pueda existir
+      // Log to verify courseId and classId values
+      this.logger.log('Saving document with values:', {
+        documentId: document.id,
+        fileName: document.fileName,
+        courseId: document.courseId,
+        classId: document.classId,
+      });
+
+      // Use upsert to handle cases where document might exist
       const savedDocument = await this.prisma.document.upsert({
         where: { id: document.id },
         update: {
@@ -32,6 +40,8 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
           documentTitle: document.documentTitle,
           documentAuthor: document.documentAuthor,
           language: document.language,
+          courseId: document.courseId,
+          classId: document.classId,
           updatedAt: new Date(),
         },
         create: {
@@ -50,6 +60,8 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
           documentTitle: document.documentTitle,
           documentAuthor: document.documentAuthor,
           language: document.language,
+          courseId: document.courseId,
+          classId: document.classId,
         },
       });
 
@@ -80,7 +92,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       const document = await this.prisma.document.findFirst({
         where: {
           fileHash,
-          status: { not: 'DELETED' }, // excluir documentos eliminados
+          status: { not: 'DELETED' }, // exclude deleted documents
         },
       });
 
@@ -98,7 +110,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       const document = await this.prisma.document.findFirst({
         where: {
           textHash,
-          status: { not: 'DELETED' }, // excluir documentos eliminados
+          status: { not: 'DELETED' }, // exclude deleted documents
         },
       });
 
@@ -246,6 +258,40 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
+  async findWithFilters(
+    filters?: { courseId?: string; classId?: string },
+    offset = 0,
+    limit = 50,
+  ): Promise<Document[]> {
+    try {
+      const whereClause: any = {};
+
+      if (filters?.courseId) {
+        whereClause.courseId = filters.courseId;
+      }
+
+      if (filters?.classId) {
+        whereClause.classId = filters.classId;
+      }
+
+      const documents = await this.prisma.document.findMany({
+        where: whereClause,
+        skip: offset,
+        take: limit,
+        orderBy: { uploadedAt: 'desc' },
+      });
+
+      return documents.map((doc) => this.mapToDomain(doc));
+    } catch (error) {
+      this.logger.error(
+        `Error finding documents with filters: ${error.message}`,
+      );
+      throw new Error(
+        `Failed to find documents with filters: ${error.message}`,
+      );
+    }
+  }
+
   async count(): Promise<number> {
     try {
       return await this.prisma.document.count();
@@ -269,7 +315,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
   }
 
   /**
-   * Convierte un documento de Prisma a entidad de dominio
+   * Converts a Prisma document to a domain entity
    */
   private mapToDomain(prismaDocument: any): Document {
     return new Document(
@@ -284,13 +330,15 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       prismaDocument.uploadedBy,
       prismaDocument.status as DocumentStatus,
       prismaDocument.extractedText,
+      prismaDocument.textHash,
       prismaDocument.pageCount,
       prismaDocument.documentTitle,
       prismaDocument.documentAuthor,
       prismaDocument.language,
+      prismaDocument.courseId,
+      prismaDocument.classId,
       prismaDocument.uploadedAt,
       prismaDocument.updatedAt,
-      prismaDocument.textHash,
     );
   }
 
@@ -308,7 +356,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
         },
       };
 
-      // Filtrar por tipo si se proporciona
+      // Filter by type if provided
       if (tipo) {
         where.contentType = {
           contains: tipo,
@@ -341,7 +389,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
         },
       };
 
-      // Filtrar por tipo si se proporciona
+      // Filter by type if provided
       if (tipo) {
         where.contentType = {
           contains: tipo,
@@ -356,7 +404,9 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       this.logger.error(
         `Error counting documents by courseId ${courseId}: ${error.message}`,
       );
-      throw new Error(`Failed to count documents by courseId: ${error.message}`);
+      throw new Error(
+        `Failed to count documents by courseId: ${error.message}`,
+      );
     }
   }
 
@@ -382,12 +432,35 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
   }
 
   /**
-   * Construye la URL del documento basada en la configuración de S3
+   * Constructs the document URL based on the S3 configuration
    */
   private buildDocumentUrl(s3Key: string): string {
-    // En un entorno real, esto vendría de la configuración
+    // In a real environment, this would come from the configuration
     const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
     const bucketName = process.env.MINIO_BUCKET_NAME || 'documents';
     return `${endpoint}/${bucketName}/${s3Key}`;
+  }
+
+  async restoreStatus(
+    id: string, 
+    previousStatus: DocumentStatus
+  ): Promise<Document | undefined> {
+    try {
+      this.logger.log(`Restoring document ${id} to status ${previousStatus}`);
+      const document = await this.prisma.document.update({
+        where: { id },
+        data: { 
+          status: previousStatus as any,
+          updatedAt: new Date()
+        },
+      });
+
+      return this.mapToDomain(document);
+    } catch (error) {
+      this.logger.error(
+        `Error restoring document ${id} status: ${error.message}`,
+      );
+      throw new Error(`Failed to restore document status: ${error.message}`);
+    }
   }
 }

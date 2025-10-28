@@ -1,35 +1,37 @@
-jest.mock('../../../identity/infrastructure/crypto/bcrypt.hasher', () => ({
-  BcryptHasher: class BcryptHasher {
-    async hash(value: string) {
-      return `mock-hash(${value})`;
-    }
-  },
-}));
-
-jest.mock('../../../../shared/handler/errors', () => ({
-  InternalServerError: class InternalServerError extends Error {},
-}));
-
 import { CreateStudentProfileUseCase } from './create-student-profile.usecase';
 import { InternalServerError } from '../../../../shared/handler/errors';
 import { Student } from '../../domain/entities/student.entity';
-import { Logger } from '@nestjs/common/services/logger.service';
+import { Logger } from '@nestjs/common';
+import type { UserServicePort } from '../../domain/ports/user.service.port';
+import type { RoleServicePort } from '../../domain/ports/role.service.port';
+import type { HasherPort } from '../../domain/ports/hasher.port';
+import type { StudentRepositoryPort } from '../../domain/ports/student.repository.ports';
 
 describe('CreateStudentProfileUseCase', () => {
   let useCase: CreateStudentProfileUseCase;
-  let userRepo: any;
-  let studentRepo: any;
-  let roleRepo: any;
-  let hasher: any;
+  let userService: jest.Mocked<UserServicePort>;
+  let studentRepo: jest.Mocked<StudentRepositoryPort>;
+  let roleService: jest.Mocked<RoleServicePort>;
+  let hasher: jest.Mocked<HasherPort>;
 
   beforeEach(() => {
-    userRepo = { create: jest.fn() };
-    studentRepo = { create: jest.fn() };
-    roleRepo = { findByName: jest.fn() };
-    hasher = new (require('../../../identity/infrastructure/crypto/bcrypt.hasher').BcryptHasher)();
+    userService = { createUser: jest.fn() };
+    roleService = { findRoleByName: jest.fn() };
+    hasher = { hash: jest.fn() };
 
-    useCase = new CreateStudentProfileUseCase(userRepo, studentRepo, roleRepo, hasher);
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    studentRepo = {
+      create: jest.fn(),
+      findByUserId: jest.fn(),
+      findByCode: jest.fn(),
+      list: jest.fn(),
+    };
+
+    useCase = new CreateStudentProfileUseCase(
+      userService,
+      studentRepo,
+      roleService,
+      hasher,
+    );
 
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
   });
@@ -37,18 +39,16 @@ describe('CreateStudentProfileUseCase', () => {
   it('should create student profile successfully', async () => {
     const input = { studentName: 'John', studentLastname: 'Doe', studentCode: 'S001' };
 
-    const role = { id: 'role1', name: 'estudiante' };
-    const createdUser = { id: 'user1' };
-    const createdStudent: Student = { userId: 'user1', code: 's001' } as Student;
-
-    roleRepo.findByName.mockResolvedValue(role);
-    userRepo.create.mockResolvedValue(createdUser);
-    studentRepo.create.mockResolvedValue(createdStudent);
+    roleService.findRoleByName.mockResolvedValue({ id: 'role1' });
+    hasher.hash.mockResolvedValue('mock-hash(does001UPB2025)');
+    userService.createUser.mockResolvedValue({ id: 'user1' });
+    studentRepo.create.mockResolvedValue(new Student('student-123', 'user1', 'S001'));
 
     const result = await useCase.execute(input);
 
-    // fixedString hace lowercase: "DoeS001" -> "does001"
-    expect(userRepo.create).toHaveBeenCalledWith(
+    expect(roleService.findRoleByName).toHaveBeenCalledWith('estudiante');
+    expect(hasher.hash).toHaveBeenCalledWith('does001UPB2025');
+    expect(userService.createUser).toHaveBeenCalledWith(
       'John',
       'Doe',
       'johndoes001@upb.edu',
@@ -56,32 +56,38 @@ describe('CreateStudentProfileUseCase', () => {
       true,
       'role1',
     );
-
     expect(studentRepo.create).toHaveBeenCalledWith('user1', 'S001');
-    expect(result).toBe(createdStudent);
+    expect(result).toBeInstanceOf(Student);
   });
 
   it('should throw InternalServerError if role not found', async () => {
-    roleRepo.findByName.mockResolvedValue(null);
+    roleService.findRoleByName.mockResolvedValue(null);
 
-    await expect(useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }))
-      .rejects.toBeInstanceOf(InternalServerError);
+    await expect(
+      useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }),
+    ).rejects.toBeInstanceOf(InternalServerError);
   });
 
   it('should throw InternalServerError if user creation fails', async () => {
-    roleRepo.findByName.mockResolvedValue({ id: 'role1', name: 'estudiante' });
-    userRepo.create.mockResolvedValue(null);
+    roleService.findRoleByName.mockResolvedValue({ id: 'role1' });
+    hasher.hash.mockResolvedValue('mock-hash');
+    userService.createUser.mockResolvedValue(null);
 
-    await expect(useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }))
-      .rejects.toBeInstanceOf(InternalServerError);
+    await expect(
+      useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }),
+    ).rejects.toBeInstanceOf(InternalServerError);
   });
 
   it('should throw InternalServerError if student creation fails', async () => {
-    roleRepo.findByName.mockResolvedValue({ id: 'role1', name: 'estudiante' });
-    userRepo.create.mockResolvedValue({ id: 'user2' });
-    studentRepo.create.mockResolvedValue(null);
+    roleService.findRoleByName.mockResolvedValue({ id: 'role1' });
+    hasher.hash.mockResolvedValue('mock-hash');
+    userService.createUser.mockResolvedValue({ id: 'user2' });
 
-    await expect(useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }))
-      .rejects.toBeInstanceOf(InternalServerError);
+    // 👇 Cast explícito para permitir null como retorno
+    studentRepo.create.mockResolvedValue(null as unknown as Student);
+
+    await expect(
+      useCase.execute({ studentName: 'Jane', studentLastname: 'Smith', studentCode: 'S002' }),
+    ).rejects.toBeInstanceOf(InternalServerError);
   });
 });

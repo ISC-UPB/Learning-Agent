@@ -18,9 +18,9 @@ export class PrismaDeletedDocumentRepositoryAdapter
 
   async findDeletedByFileHash(fileHash: string): Promise<Document | undefined> {
     try {
-      this.logger.log(`buscando documento eliminado con hash: ${fileHash}`);
-      
-      // Buscar todos los documentos DELETED para debugging
+      this.logger.log(`searching for deleted document with hash: ${fileHash}`);
+
+      // Search all DELETED documents for debugging
       const allDeletedDocs = await this.prisma.document.findMany({
         where: {
           status: 'DELETED',
@@ -29,11 +29,13 @@ export class PrismaDeletedDocumentRepositoryAdapter
           id: true,
           originalName: true,
           fileHash: true,
-        }
+        },
       });
-      
-      this.logger.log(`documentos eliminados en BD: ${JSON.stringify(allDeletedDocs, null, 2)}`);
-      
+
+      this.logger.log(
+        `deleted documents in DB: ${JSON.stringify(allDeletedDocs, null, 2)}`,
+      );
+
       const document = await this.prisma.document.findFirst({
         where: {
           fileHash,
@@ -41,15 +43,17 @@ export class PrismaDeletedDocumentRepositoryAdapter
         },
       });
 
-      this.logger.log(`resultado búsqueda por hash: ${document ? `encontrado documento ${document.id}` : 'no encontrado'}`);
+      this.logger.log(
+        `search result by hash: ${document ? `found document ${document.id}` : 'not found'}`,
+      );
 
       return document ? this.mapToDomain(document) : undefined;
     } catch (error) {
       this.logger.error(
-        `error buscando documento eliminado por hash ${fileHash}: ${error.message}`,
+        `error searching deleted document by hash ${fileHash}: ${error.message}`,
       );
       throw new Error(
-        `falló la búsqueda de documento eliminado por hash: ${error.message}`,
+        `failed to search deleted document by hash: ${error.message}`,
       );
     }
   }
@@ -66,10 +70,10 @@ export class PrismaDeletedDocumentRepositoryAdapter
       return document ? this.mapToDomain(document) : undefined;
     } catch (error) {
       this.logger.error(
-        `error buscando documento eliminado por hash de texto ${textHash}: ${error.message}`,
+        `error searching deleted document by text hash ${textHash}: ${error.message}`,
       );
       throw new Error(
-        `falló la búsqueda de documento eliminado por hash de texto: ${error.message}`,
+        `The search for deleted document by text hash failed.: ${error.message}`,
       );
     }
   }
@@ -95,17 +99,17 @@ export class PrismaDeletedDocumentRepositoryAdapter
 
       const documents = await this.prisma.document.findMany({
         where: whereConditions,
-        orderBy: { updatedAt: 'desc' }, // los eliminados más recientemente primero
-        take: 10, // limitar resultados
+        orderBy: { updatedAt: 'desc' },
+        take: 10,
       });
 
       return documents.map((doc) => this.mapToDomain(doc));
     } catch (error) {
       this.logger.error(
-        `error buscando documentos eliminados similares: ${error.message}`,
+        `error searching similar deleted documents: ${error.message}`,
       );
       throw new Error(
-        `falló la búsqueda de documentos eliminados similares: ${error.message}`,
+        `The search for similar deleted documents failed.: ${error.message}`,
       );
     }
   }
@@ -115,27 +119,25 @@ export class PrismaDeletedDocumentRepositoryAdapter
       const restoredDocument = await this.prisma.document.update({
         where: {
           id: documentId,
-          status: 'DELETED', // solo restaurar si está marcado como eliminado
+          status: 'DELETED', // only restore if it is marked as deleted
         },
         data: {
-          status: 'UPLOADED', // cambiar estado a uploaded para reprocesamiento
+          status: 'UPLOADED', // change status to uploaded for reprocessing
           updatedAt: new Date(),
         },
       });
 
-      this.logger.log(`documento restaurado: ${documentId}`);
+      this.logger.log(`restored document: ${documentId}`);
       return this.mapToDomain(restoredDocument);
     } catch (error) {
       if (error.code === 'P2025') {
-        this.logger.warn(
-          `documento no encontrado o no eliminado: ${documentId}`,
-        );
+        this.logger.warn(`Document not found or not deleted: ${documentId}`);
         return undefined;
       }
       this.logger.error(
-        `error restaurando documento ${documentId}: ${error.message}`,
+        `error restoring document ${documentId}: ${error.message}`,
       );
-      throw new Error(`falló la restauración del documento: ${error.message}`);
+      throw new Error(`The document restoration failed.: ${error.message}`);
     }
   }
 
@@ -145,16 +147,14 @@ export class PrismaDeletedDocumentRepositoryAdapter
         where: { status: 'DELETED' },
         skip: offset,
         take: limit,
-        orderBy: { updatedAt: 'desc' }, // los eliminados más recientemente primero
+        orderBy: { updatedAt: 'desc' },
       });
 
       return documents.map((doc) => this.mapToDomain(doc));
     } catch (error) {
-      this.logger.error(
-        `error obteniendo documentos eliminados: ${error.message}`,
-      );
+      this.logger.error(`error getting deleted documents: ${error.message}`);
       throw new Error(
-        `falló la obtención de documentos eliminados: ${error.message}`,
+        `The retrieval of deleted documents failed.: ${error.message}`,
       );
     }
   }
@@ -165,11 +165,9 @@ export class PrismaDeletedDocumentRepositoryAdapter
         where: { status: 'DELETED' },
       });
     } catch (error) {
-      this.logger.error(
-        `error contando documentos eliminados: ${error.message}`,
-      );
+      this.logger.error(`error counting deleted documents: ${error.message}`);
       throw new Error(
-        `falló el conteo de documentos eliminados: ${error.message}`,
+        `The count of deleted documents failed.: ${error.message}`,
       );
     }
   }
@@ -179,29 +177,27 @@ export class PrismaDeletedDocumentRepositoryAdapter
       await this.prisma.document.delete({
         where: {
           id: documentId,
-          status: 'DELETED', // solo eliminar permanentemente si está marcado como eliminado
+          status: 'DELETED', // only permanently delete if it is marked as deleted
         },
       });
-      this.logger.log(`documento eliminado permanentemente: ${documentId}`);
+      this.logger.log(`document permanently deleted: ${documentId}`);
       return true;
     } catch (error) {
       if (error.code === 'P2025') {
-        this.logger.warn(
-          `documento no encontrado o no eliminado: ${documentId}`,
-        );
+        this.logger.warn(`document not found or not deleted: ${documentId}`);
         return false;
       }
       this.logger.error(
-        `error eliminando permanentemente documento ${documentId}: ${error.message}`,
+        `Error while permanently deleting document ${documentId}: ${error.message}`,
       );
       throw new Error(
-        `falló la eliminación permanente del documento: ${error.message}`,
+        `The permanent deletion of the document failed.: ${error.message}`,
       );
     }
   }
 
   /**
-   * convierte un documento de prisma a entidad de dominio
+   * Convert a Prisma document to a domain entity
    */
   private mapToDomain(prismaDocument: any): Document {
     return new Document(
@@ -227,7 +223,7 @@ export class PrismaDeletedDocumentRepositoryAdapter
   }
 
   /**
-   * construye la url del documento basada en la configuración de s3
+   * Build the document URL based on S3 configuration
    */
   private buildDocumentUrl(s3Key: string): string {
     const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';

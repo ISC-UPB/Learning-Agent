@@ -45,8 +45,8 @@ services:
 
 volumes:
   minio-data:
-    driver: local
 
 networks:
   minio-network:
     driver: bridge
+    name: learning-agent-network

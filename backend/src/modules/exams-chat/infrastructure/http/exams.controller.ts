@@ -1,17 +1,21 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { GenerateOptionsForQuestionUseCase } from '../../application/usecases/generate-options-for-question.usecase';
+import { GetOrGenerateQuestionUseCase } from '../../application/usecases/get-or-generate-question.usecase';
 
 @Controller('exams-chat')
 export class ExamsChatController {
-  constructor(private readonly generateOptionsUseCase: GenerateOptionsForQuestionUseCase) {}
+  constructor(
+    private readonly getOrGenerateQuestionUseCase: GetOrGenerateQuestionUseCase,
+    private readonly generateOptionsUseCase: GenerateOptionsForQuestionUseCase
+  ) {}
 
-  @Get('generate-options')
-  async generateOptionsGet() {
-    return this.generateOptionsUseCase.execute();
+  @Post('generate-question')
+  async generateQuestion(@Body() body: { prompt: string; courseId?: string }) {
+    return this.getOrGenerateQuestionUseCase.execute({ prompt: body.prompt, courseId: body.courseId });
   }
 
   @Post('generate-options')
-  async generateOptionsPost() {
-    return this.generateOptionsUseCase.execute();
+  async generateOptions(@Body() body: { questionId?: string; prompt?: string; courseId?: string }) {
+    return this.generateOptionsUseCase.execute({ questionId: body.questionId, prompt: body.prompt, courseId: body.courseId });
   }
 }

@@ -2,10 +2,10 @@ import { ExtractedText } from '../value-objects/extracted-text.vo';
 
 export interface TextExtractionPort {
   /**
-   * Extrae texto de un archivo PDF
-   * @param fileBuffer Buffer del archivo PDF
-   * @param fileName Nombre original del archivo
-   * @returns Texto extraído con metadatos
+   * Extracts text from a PDF file
+   * @param fileBuffer Buffer of the PDF file
+   * @param fileName Original file name
+   * @returns Extracted text with metadata
    */
   extractTextFromPdf(
     fileBuffer: Buffer,
@@ -13,17 +13,17 @@ export interface TextExtractionPort {
   ): Promise<ExtractedText>;
 
   /**
-   * Verifica si el archivo es válido para extracción
-   * @param fileBuffer Buffer del archivo
-   * @param mimeType Tipo MIME del archivo
-   * @returns true si es válido para extracción
+   * Validates if the file is valid for extraction
+   * @param fileBuffer Buffer of the file
+   * @param mimeType MIME type of the file
+   * @returns true if valid for extraction
    */
   isValidForExtraction(fileBuffer: Buffer, mimeType: string): Promise<boolean>;
 
   /**
-   * Obtiene información básica del PDF sin extraer todo el texto
-   * @param fileBuffer Buffer del archivo PDF
-   * @returns Metadatos básicos del PDF
+   * Gets basic information about the PDF without extracting the entire text
+   * @param fileBuffer Buffer of the PDF file
+   * @returns Basic metadata of the PDF
    */
   getPdfInfo(fileBuffer: Buffer): Promise<{
     pageCount: number;

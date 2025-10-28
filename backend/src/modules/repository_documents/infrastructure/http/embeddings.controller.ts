@@ -20,23 +20,23 @@ import { GenerateDocumentEmbeddingsUseCase } from '../../application/use-cases/g
 import { SearchDocumentsUseCase } from '../../application/use-cases/search-documents.use-case';
 
 /**
- * DTO para generar embeddings de documento
+ * DTO for generating document embeddings
  */
 export class GenerateEmbeddingsDto {
-  /** Configuración de embeddings */
+  /** Embedding configuration */
   embeddingConfig?: {
     model?: string;
     dimensions?: number;
     additionalConfig?: Record<string, any>;
   };
 
-  /** Si debe reemplazar embeddings existentes */
+  /** Whether to replace existing embeddings */
   replaceExisting?: boolean = false;
 
-  /** Tamaño de lote para procesamiento */
+  /** Batch size for processing */
   batchSize?: number = 20;
 
-  /** Filtros para chunks específicos */
+  /** Filters for specific chunks */
   chunkFilters?: {
     chunkTypes?: string[];
     chunkIndices?: number[];
@@ -45,15 +45,15 @@ export class GenerateEmbeddingsDto {
 }
 
 /**
- * DTO para búsqueda semántica
+ * DTO for semantic search
  */
 export class SemanticSearchDto {
-  /** Texto de búsqueda */
-  @IsString({ message: 'La consulta debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La consulta de búsqueda es requerida' })
+  /** Search text */
+  @IsString({ message: 'Query must be a text string' })
+  @IsNotEmpty({ message: 'Search query is required' })
   query: string;
 
-  /** Opciones de búsqueda */
+  /** Search options */
   @IsOptional()
   searchOptions?: {
     limit?: number;
@@ -63,22 +63,22 @@ export class SemanticSearchDto {
     additionalFilters?: Record<string, any>;
   };
 
-  /** Si debe incluir metadatos extendidos */
+  /** Whether to include extended metadata */
   @IsOptional()
-  @IsBoolean({ message: 'includeMetadata debe ser un booleano' })
+  @IsBoolean({ message: 'includeMetadata must be a boolean' })
   includeMetadata?: boolean = true;
 
-  /** Si debe incluir contenido completo de chunks */
+  /** Whether to include complete chunk content */
   @IsOptional()
-  @IsBoolean({ message: 'includeContent debe ser un booleano' })
+  @IsBoolean({ message: 'includeContent must be a boolean' })
   includeContent?: boolean = true;
 }
 
 /**
- * Controlador para funcionalidades de embeddings y búsqueda semántica
+ * Controller for embeddings and semantic search functionalities
  *
- * Maneja las operaciones de generación de embeddings vectoriales
- * y búsqueda por similaridad semántica
+ * Handles vector embedding generation operations
+ * and semantic similarity search
  */
 @ApiTags('Repository Documents - Embeddings')
 @Controller('api/repository-documents/embeddings')
@@ -92,32 +92,32 @@ export class EmbeddingsController {
   ) {}
 
   /**
-   * Genera embeddings para todos los chunks de un documento
+   * Generate embeddings for all chunks of a document
    */
   @Post('generate/:documentId')
   @ApiOperation({
-    summary: 'Generar embeddings para un documento',
+    summary: 'Generate embeddings for a document',
     description:
-      'Procesa todos los chunks de un documento y genera embeddings vectoriales usando OpenAI',
+      'Process all chunks of a document and generate vector embeddings using OpenAI',
   })
   @ApiParam({
     name: 'documentId',
-    description: 'ID único del documento a procesar',
+    description: 'Unique ID of the document to process',
     example: 'doc_123e4567-e89b-12d3-a456-426614174000',
   })
   @ApiBody({
     type: GenerateEmbeddingsDto,
-    description: 'Configuración para la generación de embeddings',
+    description: 'Configuration for embedding generation',
     examples: {
       basic: {
-        summary: 'Configuración básica',
+        summary: 'Basic configuration',
         value: {
           replaceExisting: false,
           batchSize: 20,
         },
       },
       advanced: {
-        summary: 'Configuración avanzada',
+        summary: 'Advanced configuration',
         value: {
           embeddingConfig: {
             model: 'text-embedding-3-small',
@@ -135,7 +135,7 @@ export class EmbeddingsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Embeddings generados exitosamente',
+    description: 'Embeddings generated successfully',
     schema: {
       type: 'object',
       properties: {
@@ -162,15 +162,15 @@ export class EmbeddingsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Datos de entrada inválidos',
+    description: 'Invalid input data',
   })
   @ApiResponse({
     status: 404,
-    description: 'Documento no encontrado',
+    description: 'Document not found',
   })
   @ApiResponse({
     status: 500,
-    description: 'Error interno del servidor',
+    description: 'Internal Server Error',
   })
   async generateEmbeddings(
     @Param('documentId') documentId: string,
@@ -178,11 +178,11 @@ export class EmbeddingsController {
   ) {
     try {
       this.logger.log(
-        ` Iniciando generación de embeddings para documento: ${documentId}`,
+        `Starting embeddings generation for document: ${documentId}`,
       );
       const startTime = Date.now();
 
-      // Ejecutar caso de uso
+      // Run use case
       const result = await this.generateEmbeddingsUseCase.execute({
         documentId,
         ...dto,
@@ -191,7 +191,7 @@ export class EmbeddingsController {
       const processingTime = Date.now() - startTime;
 
       if (!result.success) {
-        this.logger.error(`Error generando embeddings: ${result.error}`);
+        this.logger.error(`Error generating embeddings: ${result.error}`);
         throw new HttpException(
           {
             message: result.error,
@@ -203,7 +203,7 @@ export class EmbeddingsController {
       }
 
       this.logger.log(
-        `Embeddings generados exitosamente para ${documentId} en ${processingTime}ms`,
+        `Embeddings generated successfully for ${documentId} in ${processingTime}ms`,
       );
 
       return {
@@ -215,7 +215,7 @@ export class EmbeddingsController {
         },
       };
     } catch (error) {
-      this.logger.error(`Error en controlador de embeddings:`, error);
+      this.logger.error(`Error in embeddings controller:`, error);
 
       if (error instanceof HttpException) {
         throw error;
@@ -223,7 +223,7 @@ export class EmbeddingsController {
 
       throw new HttpException(
         {
-          message: 'Error interno generando embeddings',
+          message: 'Internal error while generating embeddings',
           error: error instanceof Error ? error.message : 'Unknown error',
           documentId,
         },
@@ -233,28 +233,28 @@ export class EmbeddingsController {
   }
 
   /**
-   * Realiza búsqueda semántica en los documentos
+   * Perform a semantic search on the documents
    */
   @Post('search')
   @ApiOperation({
-    summary: 'Búsqueda semántica de documentos',
+    summary: 'Semantic search of documents',
     description:
-      'Busca documentos y chunks por similaridad semántica usando embeddings vectoriales',
+      'Searches for documents and chunks by semantic similarity using vector embeddings',
   })
   @ApiBody({
     type: SemanticSearchDto,
-    description: 'Parámetros de búsqueda semántica',
+    description: 'Semantic search parameters',
     examples: {
       basic: {
-        summary: 'Búsqueda básica',
+        summary: 'Basic search',
         value: {
-          query: '¿Qué es inteligencia artificial?',
+          query: 'What is artificial intelligence?',
         },
       },
       advanced: {
-        summary: 'Búsqueda avanzada',
+        summary: 'Advanced search',
         value: {
-          query: 'algoritmos de machine learning',
+          query: 'machine learning algorithms',
           searchOptions: {
             limit: 15,
             similarityThreshold: 0.6,
@@ -268,7 +268,7 @@ export class EmbeddingsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Búsqueda realizada exitosamente',
+    description: 'Search completed successfully',
     schema: {
       type: 'object',
       properties: {
@@ -304,31 +304,19 @@ export class EmbeddingsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Parámetros de búsqueda inválidos',
+    description: 'Invalid search parameters',
   })
   @ApiResponse({
     status: 500,
-    description: 'Error interno del servidor',
+    description: 'Internal server error',
   })
   async searchDocuments(@Body() dto: SemanticSearchDto) {
     try {
-      // Debug: Ver qué está llegando
-      this.logger.log(` DTO recibido:`, JSON.stringify(dto, null, 2));
-      this.logger.log(` Tipo de dto:`, typeof dto);
-      this.logger.log(` Tipo de query:`, typeof dto?.query);
-      this.logger.log(` Query value:`, dto?.query);
-
-      // Validación adicional de entrada
+      // Additional input validation
       if (!dto || !dto.query || typeof dto.query !== 'string') {
-        this.logger.error(`Validación fallida:`, {
-          dto: !!dto,
-          query: dto?.query,
-          queryType: typeof dto?.query,
-        });
         throw new HttpException(
           {
-            message:
-              'La consulta de búsqueda es requerida y debe ser una cadena válida',
+            message: 'The search query is required and must be a valid string',
             errorCode: 'INVALID_REQUEST',
             receivedData: {
               dto: !!dto,
@@ -340,16 +328,16 @@ export class EmbeddingsController {
         );
       }
 
-      this.logger.log(`Iniciando búsqueda semántica: "${dto.query}"`);
+      this.logger.log(`Starting semantic search: "${dto.query}"`);
       const startTime = Date.now();
 
-      // Ejecutar caso de uso
+      // Execute use case
       const result = await this.searchDocumentsUseCase.execute(dto);
 
       const processingTime = Date.now() - startTime;
 
       if (!result.success) {
-        this.logger.error(`Error en búsqueda semántica: ${result.error}`);
+        this.logger.error(`Error in semantic search: ${result.error}`);
         throw new HttpException(
           {
             message: result.error,
@@ -361,7 +349,7 @@ export class EmbeddingsController {
       }
 
       this.logger.log(
-        ` Búsqueda completada: ${result.result?.totalResults || 0} resultados en ${processingTime}ms`,
+        `Search completed: ${result.result?.totalResults || 0} results in ${processingTime}ms`,
       );
 
       return {
@@ -376,7 +364,7 @@ export class EmbeddingsController {
         },
       };
     } catch (error) {
-      this.logger.error(`Error en controlador de búsqueda:`, error);
+      this.logger.error(`Error in search controller:`, error);
 
       if (error instanceof HttpException) {
         throw error;
@@ -384,7 +372,7 @@ export class EmbeddingsController {
 
       throw new HttpException(
         {
-          message: 'Error interno en búsqueda semántica',
+          message: 'Internal error in semantic search',
           error: error instanceof Error ? error.message : 'Unknown error',
           query: dto.query,
         },
@@ -393,10 +381,8 @@ export class EmbeddingsController {
     }
   }
 
-  // ============ MÉTODOS PRIVADOS ============
-
   /**
-   * Convierte códigos de error a códigos HTTP apropiados
+   * Converts error codes to appropriate HTTP statuses
    */
   private getHttpStatusFromErrorCode(errorCode?: string): HttpStatus {
     switch (errorCode) {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentChunk } from '../../domain/entities/document-chunk.entity';
+import { DocumentChunkService } from '../../domain/services/document-chunk.service';
 import type {
   ChunkingStrategyPort,
   ChunkingConfig,
@@ -8,20 +9,20 @@ import type {
 } from '../../domain/ports/chunking-strategy.port';
 
 /**
- * Adaptador para chunking semántico de texto
+ * Adapter for semantic text chunking
  *
- * Implementa una estrategia inteligente de división de texto que:
- * - Respeta párrafos y oraciones
- * - Mantiene contexto semántico
- * - Optimiza para embeddings
- * - Incluye solapamiento inteligente
+ * Implements an intelligent text splitting strategy that:
+ * - Respects paragraphs and sentences
+ * - Maintains semantic context
+ * - Optimizes for embeddings
+ * - Includes intelligent overlap
  */
 @Injectable()
 export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   private readonly logger = new Logger(SemanticTextChunkingAdapter.name);
 
   /**
-   * Divide el texto en chunks usando estrategia semántica
+   * Split text into chunks using semantic strategy
    */
   async chunkText(
     documentId: string,
@@ -29,16 +30,16 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
     config: ChunkingConfig,
   ): Promise<ChunkingResult> {
     this.logger.log(
-      `Iniciando chunking semántico para documento ${documentId}: ` +
-        `${text.length} caracteres, maxSize: ${config.maxChunkSize}, overlap: ${config.overlap}`,
+      `Starting semantic chunking for document ${documentId}: ` +
+        `${text.length} characters, maxSize: ${config.maxChunkSize}, overlap: ${config.overlap}`,
     );
 
     const startTime = Date.now();
 
-    // 1. Limpiar y normalizar texto
+    // 1. Clean and normalize text
     const cleanText = this.cleanText(text);
 
-    // 2. Dividir en párrafos si se respetan
+    // 2. Split into paragraphs if respected
     const paragraphs = config.respectParagraphs
       ? this.splitIntoParagraphs(cleanText)
       : [cleanText];
@@ -46,13 +47,13 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
     const chunks: DocumentChunk[] = [];
     let chunkIndex = 0;
 
-    // 3. Procesar cada párrafo
+    // 3. Process each paragraph
     for (const paragraph of paragraphs) {
       if (paragraph.trim().length < config.minChunkSize) {
-        continue; // Saltar párrafos muy pequeños
+        continue; // Skip very small paragraphs
       }
 
-      // Si el párrafo cabe en un chunk, úsalo directamente
+      // If paragraph fits in one chunk, use it directly
       if (paragraph.length <= config.maxChunkSize) {
         const chunk = this.createChunk(
           documentId,
@@ -64,7 +65,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
         continue;
       }
 
-      // Si el párrafo es muy grande, dividirlo
+      // If paragraph is too large, split it
       const paragraphChunks = await this.chunkLargeText(
         documentId,
         paragraph,
@@ -76,15 +77,15 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
       chunkIndex += paragraphChunks.length;
     }
 
-    // 4. Aplicar solapamiento inteligente
+    // 4. Apply intelligent overlap
     const chunksWithOverlap = this.applyIntelligentOverlap(chunks, config);
 
-    // 5. Calcular estadísticas
+    // 5. Calculate statistics
     const statistics = this.calculateStatistics(chunksWithOverlap, config);
 
     const processingTime = Date.now() - startTime;
     this.logger.log(
-      `✅ Chunking completado en ${processingTime}ms: ${chunksWithOverlap.length} chunks generados`,
+      `Chunking completed in ${processingTime}ms: ${chunksWithOverlap.length} chunks generated`,
     );
 
     return {
@@ -95,7 +96,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Valida la configuración de chunking
+   * Validate chunking configuration
    */
   validateConfig(config: ChunkingConfig): boolean {
     if (config.maxChunkSize <= 0) return false;
@@ -107,44 +108,44 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Configuración por defecto optimizada para embeddings
+   * Default configuration optimized for embeddings
    */
   getDefaultConfig(): ChunkingConfig {
     return {
-      maxChunkSize: 1000, // Tamaño óptimo para embeddings
-      overlap: 100, // 10% de solapamiento
+      maxChunkSize: 1000, // Optimal size for embeddings
+      overlap: 100, // 10% overlap
       respectParagraphs: true,
       respectSentences: true,
-      minChunkSize: 50, // Mínimo para ser útil
+      minChunkSize: 50, // Minimum to be useful
     };
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  // ============ PRIVATE METHODS ============
 
   /**
-   * Limpia y normaliza el texto
+   * Clean and normalize text
    */
   private cleanText(text: string): string {
     return text
-      .replace(/\r\n/g, '\n') // Normalizar saltos de línea
-      .replace(/\n{3,}/g, '\n\n') // Máximo 2 saltos seguidos
-      .replace(/[ \t]+/g, ' ') // Espacios múltiples a uno
-      .replace(/^\s+|\s+$/g, '') // Trim general
-      .replace(/\s*\n\s*/g, '\n'); // Limpiar espacios alrededor de \n
+      .replace(/\r\n/g, '\n') // Normalize line breaks
+      .replace(/\n{3,}/g, '\n\n') // Maximum 2 consecutive breaks
+      .replace(/[ \t]+/g, ' ') // Multiple spaces to one
+      .replace(/^\s+|\s+$/g, '') // General trim
+      .replace(/\s*\n\s*/g, '\n'); // Clean spaces around \n
   }
 
   /**
-   * Divide el texto en párrafos
+   * Split text into paragraphs
    */
   private splitIntoParagraphs(text: string): string[] {
     return text
-      .split(/\n\s*\n/) // Dividir por doble salto
+      .split(/\n\s*\n/) // Split by double line break
       .map((p) => p.trim())
       .filter((p) => p.length > 0);
   }
 
   /**
-   * Divide texto grande en chunks respetando oraciones
+   * Split large text into chunks respecting sentences
    */
   private async chunkLargeText(
     documentId: string,
@@ -155,7 +156,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
     const chunks: DocumentChunk[] = [];
 
     if (config.respectSentences) {
-      // Dividir por oraciones
+      // Split by sentences
       const sentences = this.splitIntoSentences(text);
       let currentChunk = '';
       let chunkIndex = startIndex;
@@ -167,7 +168,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
         if (potentialChunk.length <= config.maxChunkSize) {
           currentChunk = potentialChunk;
         } else {
-          // Guardar chunk actual si no está vacío
+          // Save current chunk if not empty
           if (currentChunk.trim()) {
             const chunk = this.createChunk(
               documentId,
@@ -178,10 +179,10 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
             if (chunk) chunks.push(chunk);
           }
 
-          // Comenzar nuevo chunk
+          // Start new chunk
           currentChunk = sentence;
 
-          // Si una sola oración es muy grande, dividirla por palabras
+          // If single sentence is too large, split by words
           if (sentence.length > config.maxChunkSize) {
             const wordChunks = this.chunkByWords(
               documentId,
@@ -196,7 +197,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
         }
       }
 
-      // Agregar último chunk si queda algo
+      // Add last chunk if something remains
       if (currentChunk.trim()) {
         const chunk = this.createChunk(
           documentId,
@@ -207,7 +208,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
         if (chunk) chunks.push(chunk);
       }
     } else {
-      // División simple por palabras
+      // Simple division by words
       const wordChunks = this.chunkByWords(
         documentId,
         text,
@@ -221,10 +222,10 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Divide texto en oraciones
+   * Split text into sentences
    */
   private splitIntoSentences(text: string): string[] {
-    // Regex para detectar finales de oración (mejorado para español)
+    // Regex to detect sentence endings (improved for Spanish)
     const sentenceEnders = /[.!?]+\s+(?=[A-ZÁÉÍÓÚÑ])/g;
 
     return text
@@ -234,7 +235,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * División por palabras cuando las oraciones son muy grandes
+   * Split by words when sentences are too large
    */
   private chunkByWords(
     documentId: string,
@@ -266,7 +267,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
       }
     }
 
-    // Último chunk
+    // Last chunk
     if (currentChunk.trim()) {
       const chunk = this.createChunk(
         documentId,
@@ -281,7 +282,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Aplica solapamiento inteligente entre chunks
+   * Apply intelligent overlap between chunks
    */
   private applyIntelligentOverlap(
     chunks: DocumentChunk[],
@@ -297,11 +298,11 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
       const prevChunk = chunksWithOverlap[i - 1];
       const currentChunk = chunksWithOverlap[i];
 
-      // Obtener palabras del final del chunk anterior
+      // Get words from end of previous chunk
       const prevWords = prevChunk.content.split(/\s+/);
       const overlapWords = Math.min(
-        Math.floor(config.overlap / 10), // Estimación de palabras
-        Math.floor(prevWords.length / 3), // Máximo 1/3 del chunk anterior
+        Math.floor(config.overlap / 10), // Word estimation
+        Math.floor(prevWords.length / 3), // Maximum 1/3 of previous chunk
       );
 
       if (overlapWords > 0) {
@@ -314,7 +315,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Crea un chunk de documento
+   * Create a document chunk
    */
   private createChunk(
     documentId: string,
@@ -326,7 +327,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
       return null;
     }
 
-    return DocumentChunk.create(
+    return DocumentChunkService.create(
       uuidv4(),
       documentId,
       content.trim(),
@@ -341,7 +342,7 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   }
 
   /**
-   * Calcula estadísticas del proceso de chunking
+   * Calculate chunking process statistics
    */
   private calculateStatistics(chunks: DocumentChunk[], config: ChunkingConfig) {
     if (chunks.length === 0) {

@@ -1,66 +1,102 @@
+# Backend – Project
+
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Backend service built with [NestJS](https://github.com/nestjs/nest) (TypeScript).
 
 ## Requirements
 
-- Node.js version 20.x or later
-- **npm** or **yarn** version 1.x or later
-- **Docker**  + **Docker Compose**
+- Node.js version 20.x or later  
+- **npm** or **yarn**  
+- **Docker** + **Docker Compose**  
 - **Prisma CLI**
-  ```
+  ```bash
   npm install -g prisma
   ```
 
+## Mandatory prerequisites
+
+Before running the backend, make sure the following requirements are completed:
+
+1. Environment files (`.env`) must be available (provided by the project leads).  
+2. Infrastructure must be running via Docker:
+   ```bash
+   cd infra/docker
+   docker compose --env-file .env -f compose.dev.yml up -d
+   docker compose --env-file .env -f minio.compose.yml up -d
+   ```
+3. Create the database in your SQL client (e.g. DBeaver) with these credentials:
+   ```
+   POSTGRES_USER=app_user
+   POSTGRES_PASSWORD=app_pass
+   POSTGRES_DB=learning_agent
+   ```
+
+👉 The backend will **not** work unless these prerequisites are fulfilled.
+
+---
+
 ## Project setup
 
-move to the project directory
+Move to the backend directory:
 ```bash
 cd backend
 ```
-install dependencies
+
+Install dependencies:
 ```bash
 npm install
 ```
-run prisma migration
+Generar Prisma:
+```bash
+prisma generate
+```
+Si no tienes Prisma global: npm install -g prisma
+
+Run Prisma migrations:
 ```bash
 npx prisma migrate dev
 ```
 
+---
 
 ## Compile and run the project
 
 ```bash
 # development
-$ npm run start
+npm run start
 
 # watch mode
-$ npm run start:dev
+npm run start:dev
 
 # production mode
-$ npm run start:prod
+npm run start:prod
 ```
+
+---
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+npm run test
 
 # e2e tests
-$ npm run test:e2e
+npm run test:e2e
 
 # test coverage
-$ npm run test:cov
+npm run test:cov
 ```
+
+---
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+When ready to deploy in production, check the official documentation:  
+👉 [NestJS Deployment Guide](https://docs.nestjs.com/deployment)  
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
+You can also use [Mau](https://mau.nestjs.com), the official NestJS platform for AWS deployment:
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm install -g @nestjs/mau
+mau deploy
 ```

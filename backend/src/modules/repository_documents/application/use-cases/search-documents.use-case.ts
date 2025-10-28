@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DocumentEmbeddingService } from '../../domain/services/document-embedding.service';
 import type {
   VectorSearchOptions,
@@ -6,82 +6,84 @@ import type {
 } from '../../domain/ports/vector-search.port';
 
 /**
- * DTO para solicitud de búsqueda semántica
+ * DTO for semantic search request
  */
 export interface SearchDocumentsRequest {
-  /** Texto de búsqueda */
+  /** Search text */
   query: string;
 
-  /** Opciones de búsqueda */
+  /** Search options */
   searchOptions?: {
-    /** Número máximo de resultados */
+    /** Maximum number of results */
     limit?: number;
 
-    /** Umbral de similitud mínimo */
+    /** Minimum similarity threshold */
     similarityThreshold?: number;
 
-    /** Filtrar por documentos específicos */
+    /** Filter by specific documents */
     documentIds?: string[];
 
-    /** Filtrar por tipos de chunks */
+    /** Filter by chunk types */
     chunkTypes?: string[];
 
-    /** Configuración adicional */
+    /** Additional configuration */
     additionalFilters?: Record<string, any>;
   };
 
-  /** Si debe incluir metadatos extendidos */
+  /** Whether to include extended metadata */
   includeMetadata?: boolean;
 
-  /** Si debe incluir contenido completo de chunks */
+  /** Whether to include complete chunk content */
   includeContent?: boolean;
 }
 
 /**
- * Resultado de la búsqueda semántica
+ * Semantic search result
  */
 export interface SearchDocumentsResponse {
-  /** Indica si la búsqueda fue exitosa */
+  /** Indicates if the search was successful */
   success: boolean;
 
-  /** Resultado de la búsqueda */
+  /** Search result */
   result?: SemanticSearchResult;
 
-  /** Mensaje de error si falló */
+  /** Error message if failed */
   error?: string;
 
-  /** Código de error */
+  /** Error code */
   errorCode?: string;
 
-  /** Información adicional sobre la búsqueda */
+  /** Additional information about the search */
   searchInfo?: {
-    /** Tiempo de procesamiento en ms */
+    /** Processing time in ms */
     processingTimeMs: number;
 
-    /** Términos de búsqueda procesados */
+    /** Processed search terms */
     processedQuery: string;
 
-    /** Configuración aplicada */
+    /** Applied configuration */
     appliedOptions: VectorSearchOptions;
   };
 }
 
 /**
- * Caso de uso para búsqueda semántica de documentos
+ * Use case for semantic document search
  *
- * Permite realizar búsquedas por similaridad semántica en la base
- * de conocimientos de documentos usando embeddings vectoriales
+ * Allows performing semantic similarity searches in the document
+ * knowledge base using vector embeddings
  */
 @Injectable()
 export class SearchDocumentsUseCase {
+  private readonly logger = new Logger(SearchDocumentsUseCase.name);
+
   constructor(
     private readonly documentEmbeddingService: DocumentEmbeddingService,
   ) {}
 
   /**
-   * Ejecuta una búsqueda semántica en los documentos
+   * Execute a semantic search in documents
    *
-   * @param request - Solicitud con parámetros de búsqueda
+   * @param request - Request with search parameters
    */
   async execute(
     request: SearchDocumentsRequest,
@@ -89,13 +91,13 @@ export class SearchDocumentsUseCase {
     const startTime = Date.now();
 
     try {
-      // 1. Validar entrada
+      // 1. Validate input
       this.validateRequest(request);
 
-      // 2. Preparar opciones de búsqueda
+      // 2. Prepare search options
       const searchOptions = this.prepareSearchOptions(request);
 
-      // 3. Ejecutar búsqueda
+      // 3. Execute search
       const result = await this.documentEmbeddingService.searchDocuments(
         request.query,
         searchOptions,
@@ -115,7 +117,7 @@ export class SearchDocumentsUseCase {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Error en SearchDocumentsUseCase:', errorMessage);
+      this.logger.error('Error in SearchDocumentsUseCase:', errorMessage);
 
       return {
         success: false,
@@ -130,47 +132,41 @@ export class SearchDocumentsUseCase {
     }
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  // ============ PRIVATE METHODS ============
 
   /**
-   * Valida la solicitud de búsqueda
+   * Validate search request
    */
   private validateRequest(request: SearchDocumentsRequest): void {
-    // Validar query
+    // Validate query
     if (!request.query || typeof request.query !== 'string') {
-      throw new Error(
-        'La consulta de búsqueda es requerida y debe ser una cadena válida',
-      );
+      throw new Error('Search query is required and must be a valid string');
     }
 
     const trimmedQuery = request.query.trim();
     if (trimmedQuery.length === 0) {
-      throw new Error('La consulta de búsqueda no puede estar vacía');
+      throw new Error('Search query cannot be empty');
     }
 
     if (trimmedQuery.length < 3) {
-      throw new Error(
-        'La consulta de búsqueda debe tener al menos 3 caracteres',
-      );
+      throw new Error('Search query must have at least 3 characters');
     }
 
     if (trimmedQuery.length > 8000) {
-      throw new Error(
-        'La consulta de búsqueda es demasiado larga (máximo 8000 caracteres)',
-      );
+      throw new Error('Search query is too long (maximum 8000 characters)');
     }
 
-    // Validar opciones de búsqueda
+    // Validate search options
     if (request.searchOptions) {
       const { limit, similarityThreshold, documentIds } = request.searchOptions;
 
       if (limit !== undefined) {
         if (!Number.isInteger(limit) || limit < 1) {
-          throw new Error('El límite debe ser un número entero positivo');
+          throw new Error('Limit must be a positive integer');
         }
 
         if (limit > 1000) {
-          throw new Error('El límite no puede ser mayor a 1000 resultados');
+          throw new Error('Limit cannot be greater than 1000 results');
         }
       }
 
@@ -181,7 +177,7 @@ export class SearchDocumentsUseCase {
           similarityThreshold > 1
         ) {
           throw new Error(
-            'El umbral de similitud debe ser un número entre 0 y 1',
+            'Similarity threshold must be a number between 0 and 1',
           );
         }
       }
@@ -189,7 +185,7 @@ export class SearchDocumentsUseCase {
       if (documentIds && Array.isArray(documentIds)) {
         if (documentIds.length === 0) {
           throw new Error(
-            'Si se especifican IDs de documentos, debe haber al menos uno',
+            'If document IDs are specified, there must be at least one',
           );
         }
 
@@ -197,16 +193,14 @@ export class SearchDocumentsUseCase {
           (id) => !id || typeof id !== 'string',
         );
         if (invalidIds.length > 0) {
-          throw new Error(
-            'Todos los IDs de documentos deben ser cadenas válidas no vacías',
-          );
+          throw new Error('All document IDs must be valid non-empty strings');
         }
       }
     }
   }
 
   /**
-   * Prepara las opciones de búsqueda vectorial
+   * Prepare vector search options
    */
   private prepareSearchOptions(
     request: SearchDocumentsRequest,
@@ -237,7 +231,7 @@ export class SearchDocumentsUseCase {
   }
 
   /**
-   * Categoriza el tipo de error para mejor manejo
+   * Categorize error type for better handling
    */
   private categorizeError(error: unknown): string {
     if (!(error instanceof Error)) {
@@ -246,7 +240,7 @@ export class SearchDocumentsUseCase {
 
     const message = error.message.toLowerCase();
 
-    if (message.includes('consulta') || message.includes('query')) {
+    if (message.includes('query') || message.includes('search')) {
       return 'INVALID_QUERY';
     }
 
@@ -254,7 +248,7 @@ export class SearchDocumentsUseCase {
       return 'EMBEDDING_ERROR';
     }
 
-    if (message.includes('búsqueda') || message.includes('search')) {
+    if (message.includes('search') || message.includes('find')) {
       return 'SEARCH_ERROR';
     }
 
@@ -262,19 +256,19 @@ export class SearchDocumentsUseCase {
       return 'API_ERROR';
     }
 
-    if (message.includes('base de datos') || message.includes('database')) {
+    if (message.includes('database') || message.includes('db')) {
       return 'DATABASE_ERROR';
     }
 
     if (
-      message.includes('red') ||
       message.includes('network') ||
-      message.includes('timeout')
+      message.includes('timeout') ||
+      message.includes('connection')
     ) {
       return 'NETWORK_ERROR';
     }
 
-    if (message.includes('validar') || message.includes('invalid')) {
+    if (message.includes('invalid') || message.includes('validation')) {
       return 'VALIDATION_ERROR';
     }
 

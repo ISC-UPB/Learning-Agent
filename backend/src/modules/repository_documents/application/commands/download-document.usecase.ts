@@ -10,35 +10,32 @@ export class DownloadDocumentUseCase {
   ) {}
 
   /**
-   * Genera una URL de descarga para el documento con el ID especificado.
-   * Lanza NotFoundException si el documento no existe.
+   * Generate download URL for document with specified ID
+   * Throws NotFoundException if document does not exist
    */
   async execute(documentId: string): Promise<string> {
-    // Buscar el documento por ID en la base de datos
+    // Find document by ID in database
     const document = await this.documentRepository.findById(documentId);
     if (!document) {
-      throw new NotFoundException(
-        `Documento con ID "${documentId}" no encontrado`,
-      );
+      throw new NotFoundException(`Document with ID "${documentId}" not found`);
     }
 
-    // Validar existencia en el storage
+    // Validate existence in storage
     const exists = await this.storageAdapter.documentExists(document.fileName);
     if (!exists) {
       throw new NotFoundException(
-        `Archivo del documento "${document.originalName}" no encontrado en el storage`,
+        `Document file "${document.originalName}" not found in storage`,
       );
     }
 
-    // Generar URL (presigned url u otra estrategia implementada por el adapter)
+    // Generate URL (presigned url or other strategy implemented by adapter)
     const url = await this.storageAdapter.generateDownloadUrl(
       document.fileName,
     );
 
     if (!url) {
-      // Caso improbable: adapter no devuelve URL
       throw new Error(
-        `No se pudo generar la URL de descarga para el documento "${document.originalName}"`,
+        `Could not generate download URL for document "${document.originalName}"`,
       );
     }
 

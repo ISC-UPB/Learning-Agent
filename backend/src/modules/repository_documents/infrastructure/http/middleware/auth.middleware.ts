@@ -34,30 +34,30 @@ export class AuthMiddleware implements NestMiddleware {
 
   use(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      // Extraer token del header Authorization
+      // Extract the token from the Authorization header
       const authHeader = req.headers.authorization;
       if (!authHeader) {
-        throw new UnauthorizedException('Header Authorization requerido');
+        throw new UnauthorizedException('Authorization header required');
       }
 
       if (!authHeader.startsWith('Bearer ')) {
-        throw new UnauthorizedException('Token debe comenzar con Bearer');
+        throw new UnauthorizedException('The token must start with "Bearer"');
       }
 
-      const token = authHeader.substring(7); // Remover 'Bearer '
+      const token = authHeader.substring(7);
 
       if (!token) {
-        throw new UnauthorizedException('Token no proporcionado');
+        throw new UnauthorizedException('Token not provided');
       }
 
-      // Verificar y decodificar el JWT usando el mismo servicio que /auth/me
+      // Verify and decode the JWT using the same service as /auth/me
       const decoded = this.tokens.verifyAccess(token) as JwtPayload;
 
-      // Extraer información del usuario del payload JWT
+      // Extract user information from the JWT payload
       const userId = decoded.sub || decoded.userId || decoded.id;
       if (!userId) {
         throw new UnauthorizedException(
-          'Token no contiene información de usuario válida',
+          'Token does not contain valid user information',
         );
       }
 
@@ -69,13 +69,13 @@ export class AuthMiddleware implements NestMiddleware {
 
       next();
     } catch (error) {
-      // Si es un error de UnauthorizedException, re-lanzarlo
+      // If it's an UnauthorizedException error, re-throw it
       if (error instanceof UnauthorizedException) {
         throw error;
       }
 
-      // Error inesperado
-      throw new UnauthorizedException('Error de autenticación');
+      // Unexpected error
+      throw new UnauthorizedException('Authentication error');
     }
   }
 }

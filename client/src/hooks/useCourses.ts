@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUserStore } from "../store/userStore"
 import { courseService } from "../services/course.service";
 import type { Course } from "../interfaces/courseInterface";
@@ -40,17 +40,19 @@ const useCourses = () => {
         }
     }
 
-    const fetchCoursesByTeacher = async (teacherId: string) => {
+    const fetchCoursesByTeacher = useCallback(async (teacherId: string) => {
         const res = await courseService.getCourseByTeacher(teacherId);
-        const success = res?.code == 200
+        const success = res?.code === 200;
+        
         if (success) {
-            setCourses(res.data)
+          setCourses(res.data);
         }
+    
         return {
-            state: success ? "success" : "error",
-            message: success ? "Materias recuperadas exitosamente" : res?.error
-        }
-    }
+          state: success ? "success" : "error",
+          message: success ? "Materias recuperadas exitosamente" : res?.error,
+        };
+      }, []); 
 
     //Endpoints POST
     const createCourse = async (name: string) => {
@@ -80,7 +82,7 @@ const useCourses = () => {
         }
         return {
             state: success ? "success" : "error",
-            message: success ? "Materia creada correctamente" : res?.error
+            message: success ? "Materia registrada exitosamente" : res?.error
         }
     }
 

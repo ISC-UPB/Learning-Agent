@@ -16,6 +16,7 @@ import { RefreshDto } from './dtos/refresh.dto';
 import type { Request } from 'express';
 import { JwtAuthGuard } from './jwt.guard';
 import { GetMeUseCase } from '../../application/queries/get-me.usecase';
+import { RequestInfoService } from '../request-info.service';
 
 type AccessPayload = { sub: string; email: string; sid?: string };
 type AuthRequest = Request & { user: AccessPayload };
@@ -26,6 +27,7 @@ export class AuthController {
     private readonly refresh: RefreshUseCase,
     private readonly logout: LogoutUseCase,
     private readonly meUc: GetMeUseCase,
+    private readonly requestInfoService: RequestInfoService,
   ) {}
 
   @Post('login')
@@ -35,11 +37,12 @@ export class AuthController {
     @Req() req: Request,
     @Headers('user-agent') ua?: string,
   ) {
-    const ip =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-      req.socket.remoteAddress ||
-      undefined;
-    return this.login.execute({ ...dto, ip, userAgent: ua });
+    const clientInfo = this.requestInfoService.extractClientInfo(req, ua);
+    return this.login.execute({
+      ...dto,
+      ip: clientInfo.ip,
+      userAgent: clientInfo.userAgent,
+    });
   }
 
   @Post('refresh')

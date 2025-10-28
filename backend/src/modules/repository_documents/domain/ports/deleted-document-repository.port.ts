@@ -1,21 +1,21 @@
 import { Document } from '../entities/document.entity';
 
 /**
- * puerto para manejar documentos eliminados
+ * Port for handling deleted documents
  */
 export interface DeletedDocumentRepositoryPort {
   /**
-   * busca un documento eliminado por su hash de archivo
+   * Find a deleted document by its file hash
    */
   findDeletedByFileHash(fileHash: string): Promise<Document | undefined>;
 
   /**
-   * busca un documento eliminado por su hash de texto
+   * Find a deleted document by its text hash
    */
   findDeletedByTextHash(textHash: string): Promise<Document | undefined>;
 
   /**
-   * busca documentos eliminados similares por hashes
+   * Find similar deleted documents by file or text hash
    */
   findSimilarDeletedDocuments(
     fileHash?: string,
@@ -23,22 +23,22 @@ export interface DeletedDocumentRepositoryPort {
   ): Promise<Document[]>;
 
   /**
-   * restaura un documento eliminado moviendo de status DELETED a UPLOADED
+   * Restore a deleted document by moving its status from DELETED to UPLOADED
    */
   restoreDocument(documentId: string): Promise<Document | undefined>;
 
   /**
-   * obtiene todos los documentos eliminados (paginado)
+   * Get all deleted documents (paginated)
    */
   findAllDeleted(offset?: number, limit?: number): Promise<Document[]>;
 
   /**
-   * cuenta los documentos eliminados
+   * Count the number of deleted documents
    */
   countDeleted(): Promise<number>;
 
   /**
-   * elimina permanentemente un documento (hard delete)
+   * Permanently delete a document (hard delete)
    */
   permanentlyDelete(documentId: string): Promise<boolean>;
 }

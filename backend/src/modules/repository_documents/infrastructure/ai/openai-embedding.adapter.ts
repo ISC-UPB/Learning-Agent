@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { Logger } from '@nestjs/common';
 import type {
   EmbeddingGeneratorPort,
   EmbeddingConfig,
@@ -7,30 +8,30 @@ import type {
 } from '../../domain/ports/embedding-generator.port';
 
 /**
- * Configuración específica para OpenAI
+ * OpenAI specific configuration
  */
 export interface OpenAIConfig {
-  /** Clave API de OpenAI */
+  /** OpenAI API key */
   apiKey: string;
 
-  /** URL base de la API (opcional) */
+  /** API base URL (optional) */
   baseURL?: string;
 
-  /** Organización (opcional) */
+  /** Organization (optional) */
   organization?: string;
 
-  /** Proyecto (opcional) */
+  /** Project (optional) */
   project?: string;
 
-  /** Timeout en milisegundos */
+  /** Timeout in milliseconds */
   timeout?: number;
 
-  /** Número máximo de reintentos */
+  /** Maximum number of retries */
   maxRetries?: number;
 }
 
 /**
- * Modelos de embeddings disponibles en OpenAI
+ * Available embedding models in OpenAI
  */
 export enum OpenAIEmbeddingModel {
   TEXT_EMBEDDING_3_SMALL = 'text-embedding-3-small',
@@ -39,7 +40,7 @@ export enum OpenAIEmbeddingModel {
 }
 
 /**
- * Dimensiones soportadas por cada modelo
+ * Dimensions supported by each model
  */
 export const MODEL_DIMENSIONS = {
   [OpenAIEmbeddingModel.TEXT_EMBEDDING_3_SMALL]: [512, 1536], // Default: 1536
@@ -48,7 +49,7 @@ export const MODEL_DIMENSIONS = {
 } as const;
 
 /**
- * Límites de tokens por modelo
+ * Token limits per model
  */
 export const MODEL_TOKEN_LIMITS = {
   [OpenAIEmbeddingModel.TEXT_EMBEDDING_3_SMALL]: 8191,
@@ -57,14 +58,35 @@ export const MODEL_TOKEN_LIMITS = {
 } as const;
 
 /**
- * Adaptador para generación de embeddings usando OpenAI
+ * Configuration constants for embedding processing
+ */
+const EMBEDDING_PROCESSING_CONFIG = {
+  /** Maximum batch size for OpenAI (inputs per request) */
+  MAX_BATCH_SIZE: 2048,
+
+  /** Conservative token limit for batch processing */
+  MAX_TOKENS_PER_BATCH: 250000,
+
+  /** Delay between batches to avoid rate limiting (ms) */
+  BATCH_DELAY_MS: 150,
+
+  /** Characters per token for approximate estimation */
+  CHARS_PER_TOKEN: 4,
+
+  /** Maximum character limit before tokenization */
+  MAX_TEXT_LENGTH: 50000,
+} as const;
+
+/**
+ * Adapter for embedding generation using OpenAI
  *
- * Implementa la interfaz EmbeddingGeneratorPort utilizando
- * los modelos de embeddings de OpenAI
+ * Implements the EmbeddingGeneratorPort interface using
+ * OpenAI embedding models
  */
 export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
   private readonly client: OpenAI;
   private readonly defaultConfig: Required<EmbeddingConfig>;
+  private readonly logger = new Logger(OpenAIEmbeddingAdapter.name);
 
   constructor(config: OpenAIConfig) {
     this.client = new OpenAI({
@@ -72,11 +94,11 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
       baseURL: config.baseURL,
       organization: config.organization,
       project: config.project,
-      timeout: config.timeout || 60000, // 60 segundos
+      timeout: config.timeout || 60000, // 60 seconds
       maxRetries: config.maxRetries || 3,
     });
 
-    // Configuración por defecto
+    // Default configuration
     this.defaultConfig = {
       model: OpenAIEmbeddingModel.TEXT_EMBEDDING_3_SMALL,
       dimensions: 1536,
@@ -85,20 +107,20 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
   }
 
   /**
-   * Genera embedding para un texto individual
+   * Generate embedding for individual text
    */
   async generateEmbedding(
     text: string,
     config?: Partial<EmbeddingConfig>,
   ): Promise<EmbeddingResult> {
     try {
-      // 1. Validar entrada
+      // 1. Validate input
       this.validateText(text);
 
-      // 2. Preparar configuración
+      // 2. Prepare configuration
       const finalConfig = this.mergeConfig(config);
 
-      // 3. Llamar a OpenAI
+      // 3. Call OpenAI
       const response = await this.client.embeddings.create({
         model: finalConfig.model,
         input: text,
@@ -112,7 +134,7 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
       // 4. Procesar respuesta
       const embedding = response.data[0];
       if (!embedding || !embedding.embedding) {
-        throw new Error('No se recibió embedding válido de OpenAI');
+        throw new Error('No valid embedding received from OpenAI');
       }
 
       return {
@@ -122,43 +144,62 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
         model: finalConfig.model,
       };
     } catch (error) {
-      console.error('❌ Error generando embedding:', error);
+      this.logger.error('Error generating embedding:', error);
       throw this.handleOpenAIError(error, 'generateEmbedding');
     }
   }
 
   /**
-   * Genera embeddings para múltiples textos en lote
+   * Generate embeddings for multiple texts in batch
    */
   async generateBatchEmbeddings(
     texts: string[],
     config?: Partial<EmbeddingConfig>,
   ): Promise<BatchEmbeddingResult> {
     try {
-      // 1. Validar entrada
+      // 1. Validate input
       if (!texts || texts.length === 0) {
-        throw new Error('Se requiere al menos un texto para procesar');
+        throw new Error('At least one text is required for processing');
       }
 
+      // 2. If too many texts, process in batches
       if (texts.length > 2048) {
-        throw new Error('OpenAI soporta máximo 2048 inputs por lote');
+        this.logger.log(
+          `Processing ${texts.length} texts in batches (maximum 2048 per batch)`,
+        );
+        return await this.processBatchesSequentially(texts, config);
       }
 
-      // Validar cada texto
+      // 3. Estimate tokens to avoid exceeding the limit
+      const estimatedTokens = this.estimateTokens(texts);
+
+      if (estimatedTokens > EMBEDDING_PROCESSING_CONFIG.MAX_TOKENS_PER_BATCH) {
+        this.logger.log(
+          `Estimated tokens (${estimatedTokens}) exceed limit (${EMBEDDING_PROCESSING_CONFIG.MAX_TOKENS_PER_BATCH}). Processing in smaller batches.`,
+        );
+        return await this.processBatchesByTokenLimit(
+          texts,
+          EMBEDDING_PROCESSING_CONFIG.MAX_TOKENS_PER_BATCH,
+          config,
+        );
+      }
+
+      // Validate each text
       texts.forEach((text, index) => {
         try {
           this.validateText(text);
         } catch (error) {
           throw new Error(
-            `Texto inválido en índice ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            `Invalid text at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`,
           );
         }
       });
 
-      // 2. Preparar configuración
+      // 4. Prepare configuration
+
       const finalConfig = this.mergeConfig(config);
 
-      // 3. Llamar a OpenAI
+      // 5. Call OpenAI
       const response = await this.client.embeddings.create({
         model: finalConfig.model,
         input: texts,
@@ -169,10 +210,10 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
         ...finalConfig.additionalConfig,
       });
 
-      // 4. Procesar respuesta
+      // 4. Process response
       if (!response.data || response.data.length !== texts.length) {
         throw new Error(
-          `Número de embeddings recibidos (${response.data?.length || 0}) no coincide con textos enviados (${texts.length})`,
+          `Number of embeddings received (${response.data?.length || 0}) does not match texts sent (${texts.length})`,
         );
       }
 
@@ -182,7 +223,7 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
         index: item.index,
       }));
 
-      // Ordenar por índice para mantener correspondencia
+      // Sort by index to maintain correspondence
       embeddings.sort((a, b) => a.index - b.index);
 
       return {
@@ -196,82 +237,82 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
         errors: [],
       };
     } catch (error) {
-      console.error('❌ Error generando embeddings en lote:', error);
+      this.logger.error('Error generating batch embeddings:', error);
       throw this.handleOpenAIError(error, 'generateBatchEmbeddings');
     }
   }
 
   /**
-   * Valida si un texto es apto para generar embeddings
+   * Validate if text is suitable for generating embeddings
    */
   validateText(text: string): boolean {
     if (!text || typeof text !== 'string') {
-      throw new Error('El texto debe ser una cadena válida no vacía');
+      throw new Error('Text must be a valid non-empty string');
     }
 
     const trimmed = text.trim();
     if (trimmed.length === 0) {
-      throw new Error('El texto no puede estar vacío');
+      throw new Error('Text cannot be empty');
     }
 
-    if (trimmed.length > 50000) {
-      // Límite aproximado antes de tokenización
-      throw new Error('El texto es demasiado largo para procesar');
+    if (trimmed.length > EMBEDDING_PROCESSING_CONFIG.MAX_TEXT_LENGTH) {
+      // Approximate limit before tokenization
+      throw new Error('Text is too long to process');
     }
 
     return true;
   }
 
   /**
-   * Obtiene información sobre los modelos disponibles
+   * Get information about available models
    */
   getAvailableModels(): string[] {
     return Object.values(OpenAIEmbeddingModel);
   }
 
   /**
-   * Obtiene las dimensiones soportadas por un modelo
+   * Get dimensions supported by a model
    */
   getModelDimensions(model: string): number[] {
     if (model in MODEL_DIMENSIONS) {
       return [...MODEL_DIMENSIONS[model as OpenAIEmbeddingModel]];
     }
-    return [1536]; // Dimensión por defecto
+    return [1536]; // Default dimension
   }
 
   /**
-   * Obtiene el límite de tokens para un modelo
+   * Get token limit for a model
    */
   getModelTokenLimit(model: string): number {
     if (model in MODEL_TOKEN_LIMITS) {
       return MODEL_TOKEN_LIMITS[model as OpenAIEmbeddingModel];
     }
-    return 8191; // Límite por defecto
+    return 8191; // Default limit
   }
 
   /**
-   * Obtiene configuración por defecto
+   * Get default configuration
    */
   getDefaultConfig(): EmbeddingConfig {
     return { ...this.defaultConfig };
   }
 
   /**
-   * Obtiene información sobre el modelo utilizado
+   * Get information about the model used
    */
   getModelInfo() {
     return {
       name: this.defaultConfig.model,
       dimensions: this.defaultConfig.dimensions,
       maxTokens: this.getModelTokenLimit(this.defaultConfig.model),
-      costPerToken: 0.00002, // Precio aproximado de text-embedding-3-small
+      costPerToken: 0.00002, // Approximate price of text-embedding-3-small
     };
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  // ============ PRIVATE METHODS ============
 
   /**
-   * Combina la configuración por defecto con la proporcionada
+   * Combine the default settings with the provided ones
    */
   private mergeConfig(
     config?: Partial<EmbeddingConfig>,
@@ -281,16 +322,16 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
       ...config,
     };
 
-    // Validar modelo
+    // Validate model
     if (!this.getAvailableModels().includes(merged.model)) {
-      throw new Error(`Modelo no soportado: ${merged.model}`);
+      throw new Error(`Model not supported: ${merged.model}`);
     }
 
-    // Validar dimensiones
+    // Validate dimensions
     const supportedDimensions = this.getModelDimensions(merged.model);
     if (!supportedDimensions.includes(merged.dimensions)) {
       throw new Error(
-        `Dimensiones ${merged.dimensions} no soportadas para modelo ${merged.model}. Soportadas: ${supportedDimensions.join(', ')}`,
+        `Dimensions ${merged.dimensions} not supported for model ${merged.model}. Supported: ${supportedDimensions.join(', ')}`,
       );
     }
 
@@ -298,10 +339,10 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
   }
 
   /**
-   * Determina si se debe incluir el parámetro dimensions
+   * Determine if the dimensions parameter should be included
    */
   private shouldIncludeDimensions(model: string): boolean {
-    // text-embedding-ada-002 no soporta el parámetro dimensions
+    // text-embedding-ada-002 does not support the dimensions parameter
     return (
       (model as OpenAIEmbeddingModel) !==
       OpenAIEmbeddingModel.TEXT_EMBEDDING_ADA_002
@@ -309,29 +350,23 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
   }
 
   /**
-   * Maneja errores de OpenAI y los convierte a errores descriptivos
+   * Handle OpenAI errors and convert them to descriptive errors
    */
   private handleOpenAIError(error: unknown, operation: string): Error {
     if (error instanceof OpenAI.APIError) {
-      const message = `Error de API OpenAI en ${operation}: ${error.message}`;
+      const message = `OpenAI API error in ${operation}: ${error.message}`;
 
       switch (error.status) {
         case 401:
-          return new Error(`${message} - Clave API inválida o sin permisos`);
+          return new Error(`${message} - Invalid or missing API key`);
         case 429:
-          return new Error(
-            `${message} - Límite de rate excedido, intenta más tarde`,
-          );
+          return new Error(`${message} - Rate limit exceeded, try again later`);
         case 400:
-          return new Error(
-            `${message} - Solicitud inválida, verifica los parámetros`,
-          );
+          return new Error(`${message} - Invalid request, check parameters`);
         case 500:
         case 502:
         case 503:
-          return new Error(
-            `${message} - Error del servidor OpenAI, intenta más tarde`,
-          );
+          return new Error(`${message} - OpenAI server error, try again later`);
         default:
           return new Error(message);
       }
@@ -339,20 +374,194 @@ export class OpenAIEmbeddingAdapter implements EmbeddingGeneratorPort {
 
     if (error instanceof OpenAI.APIConnectionError) {
       return new Error(
-        `Error de conexión con OpenAI en ${operation}: ${error.message}`,
+        `OpenAI connection error in ${operation}: ${error.message}`,
       );
     }
 
     if (error instanceof OpenAI.RateLimitError) {
-      return new Error(
-        `Límite de rate excedido en ${operation}: ${error.message}`,
-      );
+      return new Error(`Rate limit exceeded in ${operation}: ${error.message}`);
     }
 
     if (error instanceof Error) {
-      return new Error(`Error en ${operation}: ${error.message}`);
+      return new Error(`Error in ${operation}: ${error.message}`);
     }
 
-    return new Error(`Error desconocido en ${operation}`);
+    return new Error(`Unknown error in ${operation}: ${String(error)}`);
+  }
+
+  /**
+   * Estimate the number of tokens for an array of texts
+   *
+   * Note: This is an approximate estimation. For precise counting,
+   * it is recommended to use tiktoken or another tokenization library.
+   */
+  private estimateTokens(texts: string[]): number {
+    const totalChars = texts.reduce((sum, text) => {
+      const trimmedText = text.trim();
+
+      const spaceRatio = (text.match(/\s/g) || []).length / text.length;
+      const spaceFactor = 1 + spaceRatio * 0.5;
+
+      const punctuationRatio =
+        (text.match(/[.,;:!?()[\]{}"'-]/g) || []).length / text.length;
+      const punctuationFactor = 1 + punctuationRatio * 0.3;
+
+      const adjustedLength =
+        trimmedText.length * spaceFactor * punctuationFactor;
+
+      return sum + adjustedLength;
+    }, 0);
+
+    return Math.ceil(totalChars / EMBEDDING_PROCESSING_CONFIG.CHARS_PER_TOKEN);
+  }
+
+  /**
+   * Process texts in sequential batches respecting the MAX_BATCH_SIZE limit
+   */
+  private async processBatchesSequentially(
+    texts: string[],
+    config?: Partial<EmbeddingConfig>,
+  ): Promise<BatchEmbeddingResult> {
+    const batchSize = EMBEDDING_PROCESSING_CONFIG.MAX_BATCH_SIZE;
+    const batches: string[][] = [];
+
+    // Divide into batches
+    for (let i = 0; i < texts.length; i += batchSize) {
+      batches.push(texts.slice(i, i + batchSize));
+    }
+
+    this.logger.log(
+      `Processing ${batches.length} batches of maximum ${batchSize} texts each`,
+    );
+
+    const allEmbeddings: number[][] = [];
+    let totalTokensUsed = 0;
+    let successfulCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      this.logger.debug(
+        `Processing batch ${i + 1}/${batches.length} (${batch.length} texts)`,
+      );
+
+      try {
+        // Recursive call but with smaller batch
+        const batchResult = await this.generateBatchEmbeddings(batch, config);
+
+        allEmbeddings.push(...batchResult.embeddings);
+        totalTokensUsed += batchResult.totalTokensUsed;
+        successfulCount += batchResult.successfulCount;
+        failedCount += batchResult.failedCount;
+        errors.push(...batchResult.errors);
+
+        // Small pause between batches to avoid rate limiting
+        if (i < batches.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        this.logger.error(`Error in batch ${i + 1}:`, error);
+        failedCount += batch.length;
+        errors.push(
+          `Batch ${i + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return {
+      embeddings: allEmbeddings,
+      totalEmbeddings: allEmbeddings.length,
+      dimensions: allEmbeddings[0]?.length || 0,
+      totalTokensUsed,
+      model: this.mergeConfig(config).model,
+      successfulCount,
+      failedCount,
+      errors,
+    };
+  }
+
+  /**
+   * Process texts in batches respecting the token limit
+   */
+  private async processBatchesByTokenLimit(
+    texts: string[],
+    maxTokens: number,
+    config?: Partial<EmbeddingConfig>,
+  ): Promise<BatchEmbeddingResult> {
+    const batches: string[][] = [];
+    let currentBatch: string[] = [];
+    let currentTokens = 0;
+
+    // Split into batches by token limit
+    for (const text of texts) {
+      const textTokens = this.estimateTokens([text]);
+
+      if (currentTokens + textTokens > maxTokens && currentBatch.length > 0) {
+        batches.push([...currentBatch]);
+        currentBatch = [text];
+        currentTokens = textTokens;
+      } else {
+        currentBatch.push(text);
+        currentTokens += textTokens;
+      }
+    }
+
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    this.logger.log(
+      `Processing ${batches.length} batches by token limit (maximum ${maxTokens} tokens per batch)`,
+    );
+
+    const allEmbeddings: number[][] = [];
+    let totalTokensUsed = 0;
+    let successfulCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const estimatedTokens = this.estimateTokens(batch);
+      this.logger.debug(
+        `Processing batch ${i + 1}/${batches.length} (${batch.length} texts, ~${estimatedTokens} tokens)`,
+      );
+
+      try {
+        // Recursive call but with smaller batch
+        const batchResult = await this.generateBatchEmbeddings(batch, config);
+
+        allEmbeddings.push(...batchResult.embeddings);
+        totalTokensUsed += batchResult.totalTokensUsed;
+        successfulCount += batchResult.successfulCount;
+        failedCount += batchResult.failedCount;
+        errors.push(...batchResult.errors);
+
+        // Small pause between batches to avoid rate limiting
+        if (i < batches.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      } catch (error) {
+        this.logger.error(`Error in batch ${i + 1}:`, error);
+        failedCount += batch.length;
+        errors.push(
+          `Batch ${i + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return {
+      embeddings: allEmbeddings,
+      totalEmbeddings: allEmbeddings.length,
+      dimensions: allEmbeddings[0]?.length || 0,
+      totalTokensUsed,
+      model: this.mergeConfig(config).model,
+      successfulCount,
+      failedCount,
+      errors,
+    };
   }
 }

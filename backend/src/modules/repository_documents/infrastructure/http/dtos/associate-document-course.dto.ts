@@ -1,8 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsNotEmpty,
-} from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class AssociateDocumentToCourseDto {
   @IsString()

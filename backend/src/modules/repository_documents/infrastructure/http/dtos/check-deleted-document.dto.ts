@@ -1,5 +1,5 @@
 /**
- * dto para la solicitud de verificación de documentos eliminados
+ * DTO for deleted document verification request
  */
 export class CheckDeletedDocumentRequestDto {
   skipTextExtraction?: boolean | string;
@@ -7,11 +7,15 @@ export class CheckDeletedDocumentRequestDto {
 }
 
 /**
- * dto para la respuesta de verificación de documentos eliminados
+ * DTO for deleted document verification response
  */
 export class CheckDeletedDocumentResponseDto {
   constructor(
-    public readonly status: 'exact_match' | 'text_match' | 'no_match' | 'restored',
+    public readonly status:
+      | 'exact_match'
+      | 'text_match'
+      | 'no_match'
+      | 'restored',
     public readonly message: string,
     public readonly deletedDocument?: DeletedDocumentDto,
     public readonly restoredDocument?: RestoredDocumentDto,
@@ -19,7 +23,7 @@ export class CheckDeletedDocumentResponseDto {
 }
 
 /**
- * dto para representar un documento eliminado encontrado
+ * DTO to represent a found deleted document
  */
 export class DeletedDocumentDto {
   constructor(
@@ -37,7 +41,7 @@ export class DeletedDocumentDto {
 }
 
 /**
- * dto para representar un documento restaurado
+ * DTO to represent a restored document
  */
 export class RestoredDocumentDto {
   constructor(
@@ -52,14 +56,14 @@ export class RestoredDocumentDto {
 }
 
 /**
- * dto para la solicitud de restauración manual de un documento
+ * DTO for manual document restoration request
  */
 export class RestoreDocumentRequestDto {
   constructor(public readonly documentId: string) {}
 }
 
 /**
- * dto para la respuesta de restauración de documento
+ * DTO for document restoration response
  */
 export class RestoreDocumentResponseDto {
   constructor(

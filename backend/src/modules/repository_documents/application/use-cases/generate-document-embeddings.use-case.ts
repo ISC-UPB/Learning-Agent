@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DocumentEmbeddingService } from '../../domain/services/document-embedding.service';
 import type {
   DocumentEmbeddingOptions,
@@ -6,31 +6,31 @@ import type {
 } from '../../domain/services/document-embedding.service';
 
 /**
- * DTO para solicitud de generación de embeddings
+ * DTO for embeddings generation request
  */
 export interface GenerateDocumentEmbeddingsRequest {
-  /** ID del documento */
+  /** Document ID */
   documentId: string;
 
-  /** Configuración de embeddings */
+  /** Embeddings configuration */
   embeddingConfig?: {
-    /** Modelo a utilizar */
+    /** Model to use */
     model?: string;
 
-    /** Dimensiones del embedding */
+    /** Embedding dimensions */
     dimensions?: number;
 
-    /** Configuración adicional */
+    /** Additional configuration */
     additionalConfig?: Record<string, any>;
   };
 
-  /** Si debe reemplazar embeddings existentes */
+  /** Whether to replace existing embeddings */
   replaceExisting?: boolean;
 
-  /** Tamaño de lote para procesamiento */
+  /** Batch size for processing */
   batchSize?: number;
 
-  /** Filtros para chunks específicos */
+  /** Filters for specific chunks */
   chunkFilters?: {
     chunkTypes?: string[];
     chunkIndices?: number[];
@@ -39,47 +39,49 @@ export interface GenerateDocumentEmbeddingsRequest {
 }
 
 /**
- * Resultado de la generación de embeddings
+ * Embedding generation result
  */
 export interface GenerateDocumentEmbeddingsResponse {
-  /** Indica si la operación fue exitosa */
+  /** Indicates if the operation was successful */
   success: boolean;
 
-  /** Resultado detallado */
+  /** Detailed result */
   result?: DocumentEmbeddingResult;
 
-  /** Mensaje de error si falló */
+  /** Error message if failed */
   error?: string;
 
-  /** Código de error */
+  /** Error code */
   errorCode?: string;
 }
 
 /**
- * Caso de uso para generar embeddings de un documento
+ * Use case for generating document embeddings
  *
- * Coordina el proceso completo de generación de embeddings vectoriales
- * para todos los chunks de un documento específico
+ * Coordinates the complete process of generating vector embeddings
+ * for all chunks of a specific document
  */
 @Injectable()
 export class GenerateDocumentEmbeddingsUseCase {
+  private readonly logger = new Logger(GenerateDocumentEmbeddingsUseCase.name);
+
   constructor(
     private readonly documentEmbeddingService: DocumentEmbeddingService,
   ) {}
 
   /**
-   * Ejecuta la generación de embeddings para un documento
+   * Execute embedding generation for a document
    *
-   * @param request - Solicitud con parámetros de generación
+   * @param request - Request with generation parameters
    */
   async execute(
     request: GenerateDocumentEmbeddingsRequest,
   ): Promise<GenerateDocumentEmbeddingsResponse> {
     try {
-      // 1. Validar entrada
+      // 1. Validate input
       this.validateRequest(request);
 
-      // 2. Preparar opciones
+      // 2. Prepare options
       const options: DocumentEmbeddingOptions = {
         embeddingConfig: request.embeddingConfig
           ? {
@@ -93,17 +95,17 @@ export class GenerateDocumentEmbeddingsUseCase {
         chunkFilters: request.chunkFilters,
       };
 
-      // 3. Generar embeddings
+      // 3. Generate embeddings
       const result =
         await this.documentEmbeddingService.generateDocumentEmbeddings(
           request.documentId,
           options,
         );
 
-      // 4. Verificar si hubo errores parciales
+      // 4. Check for partial errors
       if (result.chunksWithErrors > 0) {
-        console.warn(
-          `⚠️ Algunos chunks tuvieron errores: ${result.chunksWithErrors}/${result.totalChunksProcessed + result.chunksWithErrors}`,
+        this.logger.warn(
+          `Some chunks had errors: ${result.chunksWithErrors}/${result.totalChunksProcessed + result.chunksWithErrors}`,
         );
       }
 
@@ -114,8 +116,8 @@ export class GenerateDocumentEmbeddingsUseCase {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      console.error(
-        '❌ Error en GenerateDocumentEmbeddingsUseCase:',
+      this.logger.error(
+        'Error in GenerateDocumentEmbeddingsUseCase:',
         errorMessage,
       );
 
@@ -127,37 +129,35 @@ export class GenerateDocumentEmbeddingsUseCase {
     }
   }
 
-  // ============ MÉTODOS PRIVADOS ============
+  // ============ PRIVATE METHODS ============
 
   /**
-   * Valida la solicitud de generación de embeddings
+   * Validate embedding generation request
    */
   private validateRequest(request: GenerateDocumentEmbeddingsRequest): void {
-    // Validar documentId
+    // Validate documentId
     if (!request.documentId || typeof request.documentId !== 'string') {
-      throw new Error(
-        'El ID del documento es requerido y debe ser una cadena válida',
-      );
+      throw new Error('Document ID is required and must be a valid string');
     }
 
     if (request.documentId.trim().length === 0) {
-      throw new Error('El ID del documento no puede estar vacío');
+      throw new Error('Document ID cannot be empty');
     }
 
-    // Validar batchSize
+    // Validate batchSize
     if (request.batchSize !== undefined) {
       if (!Number.isInteger(request.batchSize) || request.batchSize < 1) {
-        throw new Error('El tamaño de lote debe ser un número entero positivo');
+        throw new Error('Batch size must be a positive integer');
       }
 
       if (request.batchSize > 2048) {
         throw new Error(
-          'El tamaño de lote no puede ser mayor a 2048 (límite de OpenAI)',
+          'Batch size cannot be greater than 2048 (OpenAI limit)',
         );
       }
     }
 
-    // Validar filtros de chunks
+    // Validate chunk filters
     if (request.chunkFilters) {
       if (request.chunkFilters.chunkIndices) {
         const invalidIndices = request.chunkFilters.chunkIndices.filter(
@@ -165,9 +165,7 @@ export class GenerateDocumentEmbeddingsUseCase {
         );
 
         if (invalidIndices.length > 0) {
-          throw new Error(
-            'Los índices de chunks deben ser números enteros no negativos',
-          );
+          throw new Error('Chunk indices must be non-negative integers');
         }
       }
 
@@ -177,27 +175,25 @@ export class GenerateDocumentEmbeddingsUseCase {
           request.chunkFilters.minContentLength < 0
         ) {
           throw new Error(
-            'La longitud mínima de contenido debe ser un número entero no negativo',
+            'Minimum content length must be a non-negative integer',
           );
         }
       }
     }
 
-    // Validar configuración de embeddings
+    // Validate embedding configuration
     if (request.embeddingConfig?.dimensions !== undefined) {
       if (
         !Number.isInteger(request.embeddingConfig.dimensions) ||
         request.embeddingConfig.dimensions < 1
       ) {
-        throw new Error(
-          'Las dimensiones del embedding deben ser un número entero positivo',
-        );
+        throw new Error('Embedding dimensions must be a positive integer');
       }
     }
   }
 
   /**
-   * Categoriza el tipo de error para mejor manejo
+   * Categorize the type of error for better management
    */
   private categorizeError(error: unknown): string {
     if (!(error instanceof Error)) {

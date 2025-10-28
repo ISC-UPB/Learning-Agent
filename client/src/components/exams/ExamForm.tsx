@@ -8,33 +8,92 @@ import type { ToastKind } from '../shared/Toast';
 type Props = {
   onToast: (msg: string, type?: ToastKind) => void;
   onGenerateAI?: () => void | Promise<void>;
+  initialData?: {
+    id?: string;
+    title?: string;
+    subject?: string;
+    difficulty?: string;
+    attempts?: string;
+    timeMinutes?: number;
+    reference?: string;
+    questions?: Array<{
+      type: 'multiple_choice' | 'true_false' | 'open_analysis' | 'open_exercise';
+      text: string;
+      options?: string[];
+      correctOptionIndex?: number;
+      correctBoolean?: boolean;
+      expectedAnswer?: string;
+    }>;
+  };
 };
 
 export type ExamFormHandle = { getSnapshot: () => any };
 
 export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
-  { onToast, onGenerateAI },
+  { onToast, onGenerateAI, initialData },
   ref
 ) {
   const { setValue, validate, getSnapshot, values: hookValues, getTotalQuestions } = useExamForm();
   const { token } = theme.useToken();
 
-  const [values, setValues] = useState({
-    ...hookValues,
-    multipleChoice: '',
-    trueFalse: '',
-    analysis: '',
-    openEnded: '',
-  });
-  
+  const [values, setValues] = useState(() => {
+    if (initialData) {
+      const mcCount = initialData.questions?.filter(q => q.type === 'multiple_choice').length || 0;
+      const tfCount = initialData.questions?.filter(q => q.type === 'true_false').length || 0;
+      const anCount = initialData.questions?.filter(q => q.type === 'open_analysis').length || 0;
+      const oeCount = initialData.questions?.filter(q => q.type === 'open_exercise').length || 0;
 
-  const totalQuestions = getTotalQuestions();
+      setValue('subject', initialData.subject || '');
+      setValue('difficulty', initialData.difficulty || 'medio');
+      setValue('attempts', initialData.attempts || '1');
+      setValue('multipleChoice', String(mcCount));
+      setValue('trueFalse', String(tfCount));
+      setValue('analysis', String(anCount));
+      setValue('openEnded', String(oeCount));
+      setValue('timeMinutes', '45');
+
+      return {
+        ...hookValues,
+        subject: initialData.subject || '',
+        difficulty: initialData.difficulty || 'medio',
+        attempts: initialData.attempts || '1',
+        multipleChoice: String(mcCount),
+        trueFalse: String(tfCount),
+        analysis: String(anCount),
+        openEnded: String(oeCount),
+        timeMinutes: 45,
+      };
+    }
+
+    return {
+      ...hookValues,
+      multipleChoice: '',
+      trueFalse: '',
+      analysis: '',
+      openEnded: '',
+      timeMinutes: 45,
+    };
+  });
+
 
   const [step, setStep] = useState(0);
   const steps = ['Datos generales', 'Cantidad de preguntas', 'Tiempo y referencia'];
+
+  useEffect(() => {
+    if (step === 2) {
+      setValues((prev) => ({
+        ...prev,
+        timeMinutes: 45,
+      }));
+      setValue('timeMinutes', 45);
+    }
+  }, [step]);
+
+  const totalQuestions = getTotalQuestions();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [sending, setSending] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useImperativeHandle(ref, () => ({ getSnapshot }), [getSnapshot]);
 
@@ -48,7 +107,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
         trueFalse: '',
         analysis: '',
         openEnded: '',
-        timeMinutes: '',
+        timeMinutes: 45,
         reference: '',
       });
       setValue('subject', '');
@@ -64,7 +123,17 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
   }, []);
 
   const onChange = (name: string, value: string) => {
-    const v = name === 'subject' ? value.replace(/\s+/g, ' ').trimStart() : value;
+    let v = name === 'subject' ? value.replace(/\s+/g, ' ').trimStart() : value;
+
+    if (['multipleChoice', 'trueFalse', 'analysis', 'openEnded'].includes(name)) {
+      if (value === '' || !/^\d+$/.test(value)) {
+        v = '';
+      } else {
+        const num = parseInt(value);
+        v = num.toString();
+      }
+    }
+
     setValues((prev) => ({ ...prev, [name]: v }));
     setValue(name as any, v);
     setTouched((prev) => ({ ...prev, [name]: true }));
@@ -108,6 +177,18 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
       setValue('subject', '');
       setValue('difficulty', '');
       setValue('attempts', '');
+      setTouched((prev) => ({
+        ...prev,
+        subject: false,
+        difficulty: false,
+        attempts: false,
+      }));
+      setErrors((prev) => ({
+        ...prev,
+        subject: '',
+        difficulty: '',
+        attempts: '',
+      }));
       onToast('Datos generales limpiados.', 'info');
     } else if (step === 1) {
       setValues((prev) => ({
@@ -125,10 +206,10 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
     } else if (step === 2) {
       setValues((prev) => ({
         ...prev,
-        timeMinutes: '',
+        timeMinutes: 45,
         reference: '',
       }));
-      setValue('timeMinutes', '');
+      setValue('timeMinutes', 45);
       setValue('reference', '');
       onToast('Tiempo y referencia limpiados.', 'info');
     }
@@ -213,7 +294,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
             <>
               <div className="form-group sm:col-span-2">
                 <label htmlFor="subject" className="block text-sm font-medium mb-1">
-                  Materia *
+                  Titulo del examen
                 </label>
                 <input
                   id="subject"
@@ -227,7 +308,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     outline-none transition
                     focus:ring-2
                   "
-                  placeholder="Ej: Algorítmica 1"
+                  placeholder="Ej: 1er parcial"
                   value={values.subject || ''}
                   onChange={(e) => onChange('subject', e.target.value)}
                   autoComplete="off"
@@ -248,42 +329,64 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
 
               <div className="form-group">
                 <label htmlFor="difficulty" className="block text-sm font-medium mb-1">
-                  Dificultad *
+                  Dificultad
                 </label>
-                <select
-                  id="difficulty"
-                  name="difficulty"
-                  className="
-                    w-full rounded-lg
-                    border-2 px-3 py-2
-                    text-[clamp(0.95rem,0.7vw+0.75rem,1.05rem)]
-                    outline-none transition
-                    focus:ring-2
-                  "
-                  value={values.difficulty || ''}
-                  onChange={(e) => onChange('difficulty', e.target.value)}
+                <div className="difficulty-selector"
                   style={{
-                    background: token.colorBgContainer,
-                    color: token.colorText,
-                    borderColor: token.colorBorder,
-                    boxShadow: 'none',
+                    display: 'flex',
+                    background: 'var(--app-colorBgElevated)',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    height: '44px',
+                    border: '1px solid var(--app-colorBorder)'
                   }}
-                  onFocus={(e) => (e.currentTarget.style.boxShadow = `0 0 0 2px ${token.colorPrimary}`)}
-                  onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
                 >
-                  <option value="" style={{ background: token.colorBgContainer, color: token.colorText }}>
-                    Selecciona…
-                  </option>
-                  <option value="fácil" style={{ background: token.colorBgContainer, color: token.colorText }}>
-                    Fácil
-                  </option>
-                  <option value="medio" style={{ background: token.colorBgContainer, color: token.colorText }}>
-                    Medio
-                  </option>
-                  <option value="difícil" style={{ background: token.colorBgContainer, color: token.colorText }}>
-                    Difícil
-                  </option>
-                </select>
+                  {['fácil', 'medio', 'difícil'].map((level) => (
+                    <div key={level} className="difficulty-option" style={{ flex: 1, position: 'relative' }}>
+                      <input
+                        id={`difficulty-${level}`}
+                        className="difficulty-input"
+                        type="radio"
+                        name="difficulty"
+                        value={level}
+                        checked={values.difficulty === level}
+                        onChange={(e) => onChange('difficulty', e.target.value)}
+                        style={{
+                          position: 'absolute',
+                          opacity: 0,
+                          width: 0,
+                          height: 0
+                        }}
+                      />
+                      <label
+                        htmlFor={`difficulty-${level}`}
+                        className="difficulty-label"
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: '100%',
+                          background: values.difficulty === level
+                            ? 'var(--app-colorPrimary)'
+                            : 'var(--app-colorBgContainer)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          fontSize: '13px',
+                          fontWeight: values.difficulty === level ? 600 : 500,
+                          color: values.difficulty === level
+                            ? 'var(--app-colorTextOnPrimary)'
+                            : 'var(--app-colorText)',
+                          borderRight: level !== 'difícil'
+                            ? '1px solid var(--app-colorBorder)'
+                            : 'none',
+                          textTransform: 'capitalize'
+                        }}
+                      >
+                        {level}
+                      </label>
+                    </div>
+                  ))}
+                </div>
                 {touched.difficulty && errors.difficulty && (
                   <small className="error block mt-1 text-xs text-red-500">{errors.difficulty}</small>
                 )}
@@ -291,33 +394,66 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
 
               <div className="form-group sm:col-span-1">
                 <label htmlFor="attempts" className="block text-sm font-medium mb-1">
-                  N.º de intentos *
+                  N.º de intentos
                 </label>
-                <input
-                  id="attempts"
-                  name="attempts"
-                  type="number"
-                  min={1}
-                  step={1}
-                  placeholder="1"
-                  className="
-                    w-full rounded-lg
-                    border-2 px-3 py-2
-                    text-[clamp(0.95rem,0.7vw+0.75rem,1.05rem)]
-                    outline-none transition
-                    focus:ring-2
-                  "
-                  value={values.attempts || ''}
-                  onChange={(e) => onChange('attempts', e.target.value)}
+                <div className="attempts-selector"
                   style={{
-                    background: token.colorBgContainer,
-                    color: token.colorText,
-                    borderColor: token.colorBorder,
-                    boxShadow: 'none',
+                    display: 'flex',
+                    background: 'var(--app-colorBgElevated)',
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    height: '44px',
+                    border: '1px solid var(--app-colorBorder)'
+
                   }}
-                  onFocus={(e) => (e.currentTarget.style.boxShadow = `0 0 0 2px ${token.colorPrimary}`)}
-                  onBlur={(e) => (e.currentTarget.style.boxShadow = 'none')}
-                />
+                >
+                  {[1, 2, 3].map((num) => (
+                    <div key={num} className="attempt-option" style={{ flex: 1, position: 'relative', }}>
+                      <input
+                        id={`attempts-${num}`}
+                        className="attempt-input"
+                        type="radio"
+                        name="attempts"
+                        value={num}
+                        checked={values.attempts === String(num)}
+                        onChange={(e) => onChange('attempts', e.target.value)}
+                        style={{
+                          position: 'absolute',
+                          opacity: 0,
+                          width: 0,
+                          height: 0
+                        }}
+                      />
+                      <label
+                        htmlFor={`attempts-${num}`}
+                        className="attempt-label"
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          height: '100%',
+                          background: values.attempts === String(num)
+                            ? 'var(--app-colorPrimary)'
+                            : 'var(--app-colorBgContainer)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          lineHeight: '1',
+                          color: values.attempts === String(num)
+                            ? 'var(--app-colorTextOnPrimary)'
+                            : 'var(--app-colorText)',
+                          borderRight: num < 3
+                            ? '1px solid var(--app-colorBorder)'
+                            : 'none'
+                        }}
+                      >
+                        {num}
+                      </label>
+                    </div>
+                  ))}
+                </div>
                 {touched.attempts && errors.attempts && (
                   <small className="error block mt-1 text-xs text-red-500">{errors.attempts}</small>
                 )}
@@ -337,7 +473,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
               }}
             >
               <label className="w-full text-center font-bold text-[clamp(1rem,1.2vw+0.6rem,1.15rem)] my-0">
-                Cantidad de preguntas por tipo *
+                Cantidad de preguntas por tipo
               </label>
 
               <div
@@ -362,9 +498,9 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                   <input
                     id="multipleChoice"
                     name="multipleChoice"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    pattern="[0-9]*"
+                    inputMode="numeric"
                     placeholder="0"
                     className="
                       input-hover w-full rounded-lg border-2 px-1 py-1
@@ -373,6 +509,20 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     "
                     value={values.multipleChoice || ''}
                     onChange={(e) => onChange('multipleChoice', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (![
+                        'Backspace',
+                        'Delete',
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'Tab',
+                        'Home',
+                        'End',
+                        ...[...Array(10)].map((_, i) => i.toString())
+                      ].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     style={{
                       background: token.colorBgContainer,
                       color: token.colorText,
@@ -392,9 +542,9 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                   <input
                     id="trueFalse"
                     name="trueFalse"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    pattern="[0-9]*"
+                    inputMode="numeric"
                     placeholder="0"
                     className="
                       input-hover w-full rounded-lg border-2 px-3 py-2
@@ -403,6 +553,20 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     "
                     value={values.trueFalse || ''}
                     onChange={(e) => onChange('trueFalse', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (![
+                        'Backspace',
+                        'Delete',
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'Tab',
+                        'Home',
+                        'End',
+                        ...[...Array(10)].map((_, i) => i.toString())
+                      ].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     style={{
                       background: token.colorBgContainer,
                       color: token.colorText,
@@ -422,9 +586,9 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                   <input
                     id="analysis"
                     name="analysis"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    pattern="[0-9]*"
+                    inputMode="numeric"
                     placeholder="0"
                     className="
                       input-hover w-full rounded-lg border-2 px-3 py-2
@@ -433,6 +597,20 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     "
                     value={values.analysis || ''}
                     onChange={(e) => onChange('analysis', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (![
+                        'Backspace',
+                        'Delete',
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'Tab',
+                        'Home',
+                        'End',
+                        ...[...Array(10)].map((_, i) => i.toString())
+                      ].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     style={{
                       background: token.colorBgContainer,
                       color: token.colorText,
@@ -452,9 +630,9 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                   <input
                     id="openEnded"
                     name="openEnded"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    pattern="[0-9]*"
+                    inputMode="numeric"
                     placeholder="0"
                     className="
                       input-hover w-full rounded-lg border-2 px-3 py-2
@@ -463,6 +641,20 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     "
                     value={values.openEnded || ''}
                     onChange={(e) => onChange('openEnded', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (![
+                        'Backspace',
+                        'Delete',
+                        'ArrowLeft',
+                        'ArrowRight',
+                        'Tab',
+                        'Home',
+                        'End',
+                        ...[...Array(10)].map((_, i) => i.toString())
+                      ].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
                     style={{
                       background: token.colorBgContainer,
                       color: token.colorText,
@@ -485,36 +677,25 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
 
           {step === 2 && (
             <>
-              <div className="form-group">
-                <label htmlFor="timeMinutes" className="block text-sm font-medium mb-1">
-                  Tiempo (min) *
-                </label>
-                <input
-                  id="timeMinutes"
-                  name="timeMinutes"
-                  type="number"
-                  min={45}
-                  max={240}
-                  step={1}
-                  placeholder="45"
-                  className="
-                    input-hover w-full rounded-lg border-2 px-3 py-2
-                    text-[clamp(0.95rem,0.7vw+0.75rem,1.05rem)]
-                    outline-none transition focus:ring-2
-                  "
-                  value={values.timeMinutes || ''}
-                  onChange={(e) => onChange('timeMinutes', e.target.value)}
-                  style={{
-                    background: token.colorBgContainer,
-                    color: token.colorText,
-                    borderColor: token.colorBorder,
-                    borderWidth: 2,
-                    borderStyle: 'solid',
-                  }}
-                />
-                {touched.timeMinutes && errors.timeMinutes && (
-                  <small className="error block mt-1 text-xs text-red-500">{errors.timeMinutes}</small>
-                )}
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                <label htmlFor="timeMinutes" style={{ fontWeight: 500, marginBottom: 4 }}>Tiempo (min) </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%' }}>
+                  <input
+                    id="timeMinutes"
+                    name="timeMinutes"
+                    type="range"
+                    min={45}
+                    max={240}
+                    step={1}
+                    value={values.timeMinutes}
+                    onChange={e => onChange('timeMinutes', e.target.value)}
+                    style={{
+                      flex: 1,
+                      accentColor: token.colorPrimary,
+                    }}
+                  />
+                  <span style={{ minWidth: 60, fontWeight: 500, fontSize: 16 }}>{values.timeMinutes} min</span>
+                </div>
               </div>
 
               <div className="form-group sm:col-span-2">
@@ -541,7 +722,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
                     borderStyle: 'solid',
                   }}
                 />
-                <small className="help block mt-1 text-xs opacity-70">Máx. 1000 caracteres</small>
+                <small className="help">Máx. 1000 caracteres</small>
                 {touched.reference && errors.reference && (
                   <small className="error block mt-1 text-xs text-red-500">{errors.reference}</small>
                 )}
@@ -551,7 +732,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
         </div>
       </div>
 
-      <div className="actions-row button-hover border-t flex justify-between items-center flex-wrap gap-3 px-4 " 
+      <div className="actions-row button-hover border-t flex justify-between items-center flex-wrap gap-3 px-4 "
         style={{
           alignItems: 'center',
           marginTop: 20,
@@ -580,7 +761,7 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
             Limpiar
           </Button>
         </div>
-         <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-1 py-1">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 px-1 py-1">
           {step < 2 && (
             <Button
               type="primary"
@@ -593,19 +774,44 @@ export const ExamForm = forwardRef<ExamFormHandle, Props>(function ExamForm(
               Siguiente
             </Button>
           )}
-          {step === 2 && onGenerateAI && (
+          {step === 2 && (
             <Button
-            type="primary"
-            disabled={sending || !validStep()}
-            onClick={() => {
-              if (validStep()) {
-                onGenerateAI?.();
-              }
-             }}
-             >
+              type="primary"
+              htmlType="button"          
+              loading={aiLoading}
+              disabled={sending || aiLoading}
+              onClick={async (e) => {    
+                e.preventDefault();
+                if (!onGenerateAI) {
+                  onToast('La acción de IA no está disponible en este contexto.', 'warn');
+                  return;
+                }
+
+                const ok =
+                  values.subject &&
+                  values.difficulty &&
+                  values.attempts &&
+                  getTotalQuestions() > 0 &&
+                  values.timeMinutes;
+
+                if (!ok) {
+                  onToast('Completa los pasos 1 y 2 y define tiempo antes de generar con IA.', 'warn');
+                  return;
+                }
+
+                try {
+                  setAiLoading(true);
+                  await onGenerateAI();  
+                } catch (err: any) {
+                  onToast(err?.message || 'Falló la generación con IA.', 'error');
+                } finally {
+                  setAiLoading(false);
+                }
+              }}
+            >
               Generar preguntas con IA
-              </Button>
-            )}
+            </Button>
+          )}
         </div>
       </div>
     </form>

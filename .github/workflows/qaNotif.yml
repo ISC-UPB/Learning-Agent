@@ -1,0 +1,37 @@
+name: Push-develop-QA-Notification
+
+on:
+  Push:
+    branches:
+      - develop
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Discord Webhook Action for Deployment Status
+        if: startsWith(github.event.deployment.environment, 'Preview')
+        uses: tsickert/discord-webhook@v5.3.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_QA_WEBHOOK }}
+          embed-title: "🚀 Estado de Despliegue 🚀"
+          embed-color: "5801101" 
+          embed-description: |
+            📡 Despliegue: ${{ github.event.deployment.sha }}
+
+            📝 Estado: ${{ github.event.deployment_status.state }}
+
+            👷 Entorno: ${{ github.event.deployment.environment }}
+
+            🔗 URL del Despliegue: ${{ secrets.QA_DEPLOY_URL }}
+
+            📋 Commit: ${{ github.event.deployment.sha }}
+
+            🕓 Creado en: ${{ github.event.deployment.created_at }}
+
+            ⭐ Despliegue exitoso en QA ⭐
+
+          embed-author-name: "${{ github.event.deployment_status.creator.login }}"
+            
+          embed-author-icon-url: "${{ github.event.deployment_status.creator.avatar_url }}"

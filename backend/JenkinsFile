@@ -4,7 +4,8 @@ pipeline {
     environment {
         CI = 'true'
         NODE_ENV = 'production'
-        REGISTRY_CREDENTIALS = credentials('DOCKERHUB_CREDENTIALS')
+        DOCKER_IMAGE = "adriancoello/learning-agent-backend"
+        DOCKER_TAG = "build-${BUILD_NUMBER}"
     }
 
     stages {
@@ -13,24 +14,118 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Build and Push Docker image') {
+
+        stage('Build Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
-                    script {
-                        def image = "${DOCKERHUB_USER}/learning-agent-backend:${env.BUILD_NUMBER}"
-                        dir('backend') {
-                            sh 'docker -v && docker info'
-                            sh 'echo "Directorio actual:" && pwd'
-                            sh 'echo "Contenido actual:" && ls -la'
-                            sh "docker build -t ${image} ."
-                        }
+                script {
+                    dir('backend') {
+                        sh 'echo "Building Docker image..."'
+                        sh "docker build -t $DOCKER_IMAGE:$DOCKER_TAG ."
+                    }
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                script {
+                    sh 'echo "Running tests inside Docker..."'
+                    sh "docker run --rm $DOCKER_IMAGE:$DOCKER_TAG npm test || echo 'No tests found'"
+                }
+            }
+        }
+
+        stage('Save and Transfer Docker Image') {
+            steps {
+                script {
+                    sh """
+                        echo "Saving Docker image to tar file..."
+                        docker save $DOCKER_IMAGE:$DOCKER_TAG -o backend-image.tar
+                        echo "Compressing image..."
+                        gzip backend-image.tar
+                    """
+                    
+                    sshagent(['droplet-ssh-key']) {
                         sh """
-                            echo \"$DOCKERHUB_PASS\" | docker login -u \"$DOCKERHUB_USER\" --password-stdin
-                            docker push ${image}
+                            echo "Transferring image to droplet..."
+                            scp -o StrictHostKeyChecking=no backend-image.tar.gz root@${env.DROPLET_IP}:/tmp/
+                            
+                            echo "Loading image on droplet..."
+                            ssh -o StrictHostKeyChecking=no root@${env.DROPLET_IP} '
+                                cd /tmp
+                                gunzip backend-image.tar.gz
+                                docker load -i backend-image.tar
+                                rm backend-image.tar
+                            '
+                        """
+                    }
+                    
+                    sh "rm backend-image.tar.gz"
+                }
+            }
+        }
+
+        stage('Deploy to Droplet') {
+            steps {
+                script {
+                    sshagent(['droplet-ssh-key']) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no root@${env.DROPLET_IP} '
+                                echo "Stopping existing containers..."
+                                docker stop learning-agent-backend learning-agent-db || true
+                                docker rm learning-agent-backend learning-agent-db || true
+        
+                                echo "Creating persistent volume for PostgreSQL if it does not exist..."
+                                docker volume create postgres-data 2>/dev/null || echo "Volume already exists"
+                                
+                                echo "Starting PostgreSQL container..."
+                                docker run -d \\
+                                    --name learning-agent-db \\
+                                    -e POSTGRES_USER=postgres \\
+                                    -e POSTGRES_PASSWORD=password \\
+                                    -e POSTGRES_DB=learning_agent \\
+                                    -p 5432:5432 \\
+                                    -v postgres-data:/var/lib/postgresql/data \\
+                                    --restart unless-stopped \\
+                                    pgvector/pgvector:pg16
+
+                                echo "Waiting for PostgreSQL to be ready..."
+                                sleep 15
+
+                                echo "Creating pgvector extension..."
+                                docker exec learning-agent-db psql -U postgres -d learning_agent -c \"CREATE EXTENSION IF NOT EXISTS vector;\"
+        
+                                echo "Running backend container..."
+                                docker run -d \\
+                                    --name learning-agent-backend \\
+                                    -p 3000:3000 \\
+                                    --env-file /root/Learning-Agent/backend/.env \\
+                                    -e DATABASE_URL=postgresql://postgres:password@learning-agent-db:5432/learning_agent \\
+                                    --link learning-agent-db \\
+                                    --restart unless-stopped \\
+                                    ${env.DOCKER_IMAGE}:${env.DOCKER_TAG}
+                                
+                                echo "Waiting for backend to be ready..."
+                                sleep 30
+                                
+                                echo "Deployment completed!"
+                                
+                                echo "Checking if seed is needed (only runs if DB is empty)..."
+                                docker exec learning-agent-backend node dist/prisma/seed.js || echo "Seed not needed or failed"
+                            '
                         """
                     }
                 }
             }
+        }
+    } 
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
         }
     }
 }

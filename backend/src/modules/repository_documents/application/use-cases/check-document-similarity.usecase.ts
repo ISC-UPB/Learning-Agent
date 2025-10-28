@@ -35,7 +35,7 @@ export class CheckDocumentSimilarityUseCase {
     try {
       this.logger.log(`Starting similarity check for: ${request.originalName}`);
 
-      // paso 1: verificar hash binario exacto (sha-256)
+      // Step 1: Check exact binary hash (SHA-256)
       const fileHash = this.generateFileHash(request.file);
       const exactMatch = await this.documentRepository.findByFileHash(fileHash);
 
@@ -44,17 +44,15 @@ export class CheckDocumentSimilarityUseCase {
           `Found exact binary match: ${exactMatch.id}, Status: ${exactMatch.status}, Name: ${exactMatch.originalName}`,
         );
 
-        // Verificar que el documento está ACTIVO (no DELETED)
+        // Verify that document is ACTIVE (not DELETED)
         if (exactMatch.status === DocumentStatus.DELETED) {
           this.logger.warn(
-            `Documento encontrado está DELETED, debería haber sido excluido por findByFileHash`,
+            `Found document is DELETED, should have been excluded by findByFileHash`,
           );
-          // No considerar como match si está eliminado
-          // Continuar con verificación de texto hash
+          // Don't consider as match if deleted
+          // Continue with text hash verification
         } else {
-          this.logger.log(
-            `Documento ACTIVO encontrado, considerando como duplicado`,
-          );
+          this.logger.log(`ACTIVE document found, considering as duplicate`);
           return new DocumentSimilarityResult(
             'exact_match',
             new DocumentMatch(
@@ -70,7 +68,7 @@ export class CheckDocumentSimilarityUseCase {
         }
       }
 
-      // paso 2: extraer texto y verificar hash de texto
+      // Step 2: Extract text and verify text hash
       const extractedText = await this.textExtraction.extractTextFromPdf(
         request.file,
         request.originalName,
@@ -78,7 +76,7 @@ export class CheckDocumentSimilarityUseCase {
 
       const textHash = this.generateTextHash(extractedText.content);
 
-      // verificar coincidencia por hash de texto (mismo contenido, posible otra edición)
+      // Check for text hash match (same content, possibly different edition)
       const textHashMatch =
         await this.documentRepository.findByTextHash(textHash);
       if (textHashMatch) {
@@ -99,12 +97,12 @@ export class CheckDocumentSimilarityUseCase {
         );
       }
 
-      // paso 3: omitir embeddings si se solicita
+      // Step 3: Skip embeddings if requested
       if (request.options?.skipEmbeddings) {
         return new DocumentSimilarityResult('no_match');
       }
 
-      // paso 4: generar chunks y embeddings para la verificación de similitud
+      // Step 4: Generate chunks and embeddings for similarity verification
       const { similarCandidates, generatedData } =
         await this.findSimilarDocuments(
           extractedText.content,
@@ -141,14 +139,14 @@ export class CheckDocumentSimilarityUseCase {
     }
   }
 
-  // genera hash sha-256 del contenido del archivo
+  // Generate SHA-256 hash of file content
   private generateFileHash(fileBuffer: Buffer): string {
     return createHash('sha256').update(fileBuffer).digest('hex');
   }
 
-  // genera hash del texto normalizado
+  // Generate hash of normalized text
   private generateTextHash(text: string): string {
-    // normalizar texto: minúsculas, quitar espacios extra y normalizar saltos de línea
+    // Normalize text: lowercase, remove extra spaces and normalize line breaks
     const normalizedText = text
       .toLowerCase()
       .replace(/\s+/g, ' ')
@@ -158,7 +156,7 @@ export class CheckDocumentSimilarityUseCase {
     return createHash('sha256').update(normalizedText, 'utf8').digest('hex');
   }
 
-  // buscar documentos similares usando embeddings y búsqueda vectorial
+  // Find similar documents using embeddings and vector search
   private async findSimilarDocuments(
     text: string,
     threshold: number,
@@ -170,7 +168,7 @@ export class CheckDocumentSimilarityUseCase {
     generatedData?: GeneratedSimilarityData;
   }> {
     try {
-      // paso 1: generar chunks - se usa un id temporal
+      // Step 1: Generate chunks - using temporary ID
       const tempDocumentId = 'temp-similarity-check';
       const defaultConfig = this.chunkingStrategy.getDefaultConfig();
 
@@ -184,47 +182,44 @@ export class CheckDocumentSimilarityUseCase {
         },
       );
 
-      // paso 2: procesar todos los chunks (100%) para verificación totalmente precisa
-      // Usar 100% de los chunks en lugar de muestreo para máxima precisión
-      const samplingPercentage = 1.0; // 100% de los chunks
-      const maxSampleCount = chunkingResult.chunks.length; // Todos los chunks
+      // Step 2: Process all chunks for fully accurate verification
 
-      const chunksToProcess = chunkingResult.chunks; // Usar TODOS los chunks
+      const chunksToProcess = chunkingResult.chunks;
 
       this.logger.log(
         `Processing ${chunksToProcess.length} of ${chunkingResult.chunks.length} chunks (100% - all chunks for maximum precision)`,
       );
 
-      // paso 3: generar embeddings para los chunks
+      // Step 3: Generate embeddings for chunks
       const chunkContents = chunksToProcess.map(
         (chunk: any) => chunk.content as string,
       );
       const embeddingResult =
         await this.embeddingGenerator.generateBatchEmbeddings(chunkContents);
 
-      // paso 4: buscar chunks similares
+      // Step 4: Search for similar chunks
       const documentScores = new Map<string, DocumentScore>();
 
-      // DEBUG: Verificar si hay documentos activos en la base de datos
+      // DEBUG: Check if there are active documents in database
       const activeDocuments = await this.documentRepository.findAll();
       this.logger.log(
-        `DEBUG: Documentos activos en base de datos: ${activeDocuments.length}`,
+        `DEBUG: Active documents in database: ${activeDocuments.length}`,
       );
 
       if (activeDocuments.length === 0) {
         this.logger.warn(
-          `No hay documentos activos en la base de datos para comparar. La DB parece estar vacía.`,
+          `No active documents in database to compare. DB appears to be empty.`,
         );
-        // Continuar pero ya sabemos que no habrá resultados
+        // Continue but we already know there will be no results
       } else {
-        // DEBUG: Verificar chunks para cada documento
+        // DEBUG: Check chunks for each document
         for (const doc of activeDocuments.slice(0, 3)) {
-          // Solo los primeros 3 para no spam logs
+          // Only first 3 to avoid spam logs
           const chunkCount = await this.chunkRepository.countByDocumentId(
             doc.id,
           );
           this.logger.log(
-            `DEBUG: Documento ${doc.id} (${doc.originalName}): ${chunkCount} chunks`,
+            `DEBUG: Document ${doc.id} (${doc.originalName}): ${chunkCount} chunks`,
           );
         }
       }
@@ -232,40 +227,40 @@ export class CheckDocumentSimilarityUseCase {
       for (let i = 0; i < embeddingResult.embeddings.length; i++) {
         const embedding = embeddingResult.embeddings[i];
 
-        // DEBUG: Log detallado para los primeros chunks
+        // DEBUG: Detailed log for first chunks
         if (i < 3) {
           this.logger.log(
-            `🔍 DEBUG: Buscando chunk ${i + 1}/${embeddingResult.embeddings.length} - Embedding dimensiones: ${embedding.length}`,
+            `DEBUG: Searching chunk ${i + 1}/${embeddingResult.embeddings.length} - Embedding dimensions: ${embedding.length}`,
           );
         }
 
         const searchResults = await this.vectorSearch.searchByVector(
           embedding,
           {
-            limit: 5, // 5 mejores coincidencias por chunk
-            similarityThreshold: Math.max(0.3, threshold - 0.2), // más permisivo para chunks individuales
+            limit: 5, // 5 best matches per chunk
+            similarityThreshold: Math.max(0.3, threshold - 0.2), // More permissive for individual chunks
           },
         );
 
-        // DEBUG: Log resultados de la búsqueda
+        // DEBUG: Log search results
         if (i < 3 || searchResults.chunks.length > 0) {
           this.logger.log(
-            `🔍 DEBUG: Chunk ${i + 1} encontró ${searchResults.chunks.length} resultados similares`,
+            `DEBUG: Chunk ${i + 1} found ${searchResults.chunks.length} similar results`,
           );
           if (searchResults.chunks.length > 0) {
             searchResults.chunks.forEach((result, idx) => {
               this.logger.log(
-                `  - Resultado ${idx + 1}: Doc ${result.documentId}, similarity: ${result.similarityScore.toFixed(3)}`,
+                `  - Result ${idx + 1}: Doc ${result.documentId}, similarity: ${result.similarityScore.toFixed(3)}`,
               );
             });
           }
         }
 
-        // agregar resultados por documento
+        // Add results by document
         for (const result of searchResults.chunks) {
           const docId = result.documentId;
           if (!documentScores.has(docId)) {
-            // Obtener el número real de chunks del documento desde la BD
+            // Get real number of chunks from document in DB
             const documentChunkCount =
               await this.chunkRepository.countByDocumentId(docId);
 
@@ -286,39 +281,39 @@ export class CheckDocumentSimilarityUseCase {
         }
       }
 
-      // paso 5: calcular puntuaciones finales y filtrar candidatos
+      // Step 5: Calculate final scores and filter candidates
       const candidatesList: SimilarDocumentCandidate[] = [];
 
       this.logger.log(
-        `Documentos encontrados en búsqueda vectorial: ${documentScores.size}`,
+        `Documents found in vector search: ${documentScores.size}`,
       );
 
       for (const [docId, score] of documentScores) {
-        // calcular métricas
+        // Calculate metrics
         score.avgSimilarity =
           score.similarities.reduce((a, b) => a + b, 0) /
           score.similarities.length;
-        score.coverage = score.matchedChunks / Math.max(score.totalChunks, 1); // Evitar división por 0
+        score.coverage = score.matchedChunks / Math.max(score.totalChunks, 1); // Avoid division by 0
 
-        // Limitar coverage a máximo 1.0 (100%)
+        // Limit coverage to maximum 1.0 (100%)
         score.coverage = Math.min(score.coverage, 1.0);
 
-        // Normalizar avgSimilarity a rango [0,1]
+        // Normalize avgSimilarity to range [0,1]
         score.avgSimilarity = Math.min(Math.max(score.avgSimilarity, 0), 1.0);
 
         score.finalScore = score.avgSimilarity * score.coverage;
 
-        // Asegurar que finalScore esté en rango [0,1]
+        // Ensure finalScore is in range [0,1]
         score.finalScore = Math.min(Math.max(score.finalScore, 0), 1.0);
 
         this.logger.log(
-          `Documento ${docId}: chunks=${score.matchedChunks}/${score.totalChunks}, avgSim=${score.avgSimilarity.toFixed(3)}, coverage=${score.coverage.toFixed(3)}, finalScore=${score.finalScore.toFixed(3)}, threshold=${threshold}`,
+          `Document ${docId}: chunks=${score.matchedChunks}/${score.totalChunks}, avgSim=${score.avgSimilarity.toFixed(3)}, coverage=${score.coverage.toFixed(3)}, finalScore=${score.finalScore.toFixed(3)}, threshold=${threshold}`,
         );
 
-        // filtrar por umbral
+        // Filter by threshold
         if (score.finalScore >= threshold) {
           this.logger.log(
-            `Documento ${docId} supera el umbral, agregando como candidato`,
+            `Document ${docId} exceeds threshold, adding as candidate`,
           );
 
           const document = await this.documentRepository.findById(docId);
@@ -341,21 +336,19 @@ export class CheckDocumentSimilarityUseCase {
           }
         } else {
           this.logger.log(
-            `Documento ${docId} NO supera el umbral (${score.finalScore.toFixed(3)} < ${threshold})`,
+            `Document ${docId} does NOT exceed threshold (${score.finalScore.toFixed(3)} < ${threshold})`,
           );
         }
       }
 
-      this.logger.log(
-        `Candidatos finales encontrados: ${candidatesList.length}`,
-      );
+      this.logger.log(`Final candidates found: ${candidatesList.length}`);
 
-      // ordenar por puntuación (mayor primero) y limitar resultados
+      // Sort by score (highest first) and limit results
       const finalCandidates = candidatesList
         .sort((a, b) => b.similarityScore - a.similarityScore)
         .slice(0, maxCandidates);
 
-      // Preparar datos generados para reutilización si se solicita
+      // Prepare generated data for reuse if requested
       const generatedData: GeneratedSimilarityData | undefined =
         returnGeneratedData
           ? {
@@ -381,8 +374,8 @@ export class CheckDocumentSimilarityUseCase {
     }
   }
 
-  // muestrea chunks para procesamiento más rápido
-  // toma chunks del inicio, medio y final del documento
+  // Sample chunks for faster processing
+  // Take chunks from beginning, middle and end of document
   private sampleChunks(chunks: any[], maxSamples: number): any[] {
     if (chunks.length <= maxSamples) {
       return chunks;
@@ -391,7 +384,7 @@ export class CheckDocumentSimilarityUseCase {
     const sampled: any[] = [];
     const step = chunks.length / maxSamples;
 
-    // tomar muestras distribuidas a lo largo del documento
+    // Take samples distributed throughout the document
     for (let i = 0; i < maxSamples; i++) {
       const index = Math.floor(i * step);
       sampled.push(chunks[index]);

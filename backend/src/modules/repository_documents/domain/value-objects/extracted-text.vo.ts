@@ -12,37 +12,37 @@ export class ExtractedText {
 
   private validate(): void {
     if (!this.content || this.content.trim().length === 0) {
-      throw new Error('El texto extraído no puede estar vacío');
+      throw new Error('Extracted text cannot be empty');
     }
 
     if (this.pageCount !== undefined && this.pageCount < 1) {
-      throw new Error('El número de páginas debe ser mayor a 0');
+      throw new Error('Page count must be greater than 0');
     }
   }
 
   /**
-   * Obtiene la longitud del texto extraído
+   * Gets extracted text length
    */
   getContentLength(): number {
     return this.content.length;
   }
 
   /**
-   * Obtiene el número de palabras aproximado
+   * Gets approximate word count
    */
   getWordCount(): number {
     return this.content.trim().split(/\s+/).length;
   }
 
   /**
-   * Verifica si el texto tiene un título extraído
+   * Checks if text has extracted title
    */
   hasTitle(): boolean {
     return Boolean(this.documentTitle && this.documentTitle.trim().length > 0);
   }
 
   /**
-   * Verifica si el texto tiene autor extraído
+   * Checks if text has extracted author
    */
   hasAuthor(): boolean {
     return Boolean(
@@ -51,7 +51,7 @@ export class ExtractedText {
   }
 
   /**
-   * Obtiene un resumen del texto (primeros N caracteres)
+   * Gets text summary (first N characters)
    */
   getSummary(maxLength: number = 200): string {
     if (this.content.length <= maxLength) {
@@ -62,7 +62,7 @@ export class ExtractedText {
   }
 
   /**
-   * Crea una instancia con metadatos adicionales
+   * Creates instance with additional metadata
    */
   withMetadata(metadata: Record<string, any>): ExtractedText {
     return new ExtractedText(

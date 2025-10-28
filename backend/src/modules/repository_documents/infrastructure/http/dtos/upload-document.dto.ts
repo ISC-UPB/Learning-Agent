@@ -19,7 +19,7 @@ export class UploadDocumentRequestDto {
   @IsNumber()
   size?: number;
 
-  // ejemplo de campo opcional adicional (tags, carpeta, etc.)
+  // Example of additional optional field (tags, folder, etc.)
   @IsOptional()
   @IsString()
   folder?: string;
@@ -39,7 +39,7 @@ export class UploadDocumentRequestDto {
 
 export class UploadDocumentResponseDto {
   @IsString()
-  id: string; // ID del documento en la base de datos
+  id: string;
 
   @IsString()
   fileName: string;

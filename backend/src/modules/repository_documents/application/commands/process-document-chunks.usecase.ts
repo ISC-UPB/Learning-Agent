@@ -7,13 +7,13 @@ import type {
 import { DocumentStatus } from '../../domain/entities/document.entity';
 
 /**
- * Comando para procesar chunks de un documento
+ * Command to process document chunks
  */
 export interface ProcessDocumentChunksCommand {
-  /** ID del documento a procesar */
+  /** ID of document to process */
   documentId: string;
 
-  /** Configuración personalizada de chunking (opcional) */
+  /** Custom chunking configuration (optional) */
   chunkingConfig?: {
     maxChunkSize?: number;
     overlap?: number;
@@ -22,20 +22,20 @@ export interface ProcessDocumentChunksCommand {
     minChunkSize?: number;
   };
 
-  /** Si debe reemplazar chunks existentes */
+  /** Whether to replace existing chunks */
   replaceExisting?: boolean;
 
-  /** Tipo de chunk personalizado */
+  /** Custom chunk type */
   chunkType?: string;
 }
 
 /**
- * Caso de uso para procesar chunks de un documento
+ * Use case to process document chunks
  *
- * Orquesta el proceso completo de chunking:
- * 1. Validar que el documento existe y tiene texto extraído
- * 2. Procesar chunks usando el servicio de dominio
- * 3. Actualizar el estado del documento
+ * Orchestrates the complete chunking process:
+ * 1. Validate that document exists and has extracted text
+ * 2. Process chunks using domain service
+ * 3. Update document status
  */
 @Injectable()
 export class ProcessDocumentChunksUseCase {
@@ -47,7 +47,7 @@ export class ProcessDocumentChunksUseCase {
   ) {}
 
   /**
-   * Ejecuta el procesamiento de chunks para un documento
+   * Execute chunk processing for a document
    */
   async execute(
     command: ProcessDocumentChunksCommand,
@@ -55,56 +55,59 @@ export class ProcessDocumentChunksUseCase {
     const { documentId, chunkingConfig, replaceExisting, chunkType } = command;
 
     try {
-      this.logger.log(
-        `Iniciando procesamiento de chunks para documento: ${documentId}`,
-      );
+      this.logger.log(`Starting chunk processing for document: ${documentId}`);
 
-      // 1. Verificar que el documento existe
+      // 1. Verify that document exists
       const document = await this.documentRepository.findById(documentId);
       if (!document) {
-        throw new NotFoundException(`Documento no encontrado: ${documentId}`);
+        throw new NotFoundException(`Document not found: ${documentId}`);
       }
 
-      // 2. Verificar que el documento tiene texto extraído
+      // 2. Verify that document has extracted text
       if (
         !document.extractedText ||
         document.extractedText.trim().length === 0
       ) {
-        throw new Error(`El documento ${documentId} no tiene texto extraído`);
+        throw new Error(`Document ${documentId} has no extracted text`);
       }
 
-      // 3. Verificar el estado del documento
+      // 3. Verify document status
       if (document.status !== DocumentStatus.PROCESSED) {
         this.logger.warn(
-          `Documento ${documentId} tiene estado ${document.status}, pero continuando con chunking`,
+          `Document ${documentId} has status ${document.status}, but continuing with chunking`,
         );
       }
 
-      // 4. Verificar si ya existen chunks (si no se va a reemplazar)
+      // 4. Check if chunks already exist (if not replacing)
       if (!replaceExisting) {
-        const existingChunks =
-          await this.chunkingService.getDocumentChunks(documentId);
-        if (existingChunks.total > 0) {
-          this.logger.log(
-            `Documento ${documentId} ya tiene ${existingChunks.total} chunks existentes. Saltando procesamiento.`,
-          );
-          return {
-            status: 'success',
-            savedChunks: existingChunks.chunks,
-            chunkingResult: {
-              chunks: existingChunks.chunks,
-              totalChunks: existingChunks.total,
-              statistics: {
-                ...existingChunks.statistics,
-                actualOverlapPercentage: 0, // No se puede calcular para chunks existentes
+        const canCheckExisting =
+          typeof (this.chunkingService as any).getDocumentChunks === 'function';
+        if (canCheckExisting) {
+          const existingChunks = await (
+            this.chunkingService as any
+          ).getDocumentChunks(documentId);
+          if (existingChunks.total > 0) {
+            this.logger.log(
+              `Document ${documentId} already has ${existingChunks.total} existing chunks. Skipping processing.`,
+            );
+            return {
+              status: 'success',
+              savedChunks: existingChunks.chunks,
+              chunkingResult: {
+                chunks: existingChunks.chunks,
+                totalChunks: existingChunks.total,
+                statistics: {
+                  ...existingChunks.statistics,
+                  actualOverlapPercentage: 0,
+                },
               },
-            },
-            processingTimeMs: 0,
-          };
+              processingTimeMs: 0,
+            };
+          }
         }
       }
 
-      // 5. Procesar chunks usando el servicio de dominio
+      // 5. Process chunks using domain service
       const result = await this.chunkingService.processDocumentChunks(
         documentId,
         document.extractedText,
@@ -115,23 +118,23 @@ export class ProcessDocumentChunksUseCase {
         },
       );
 
-      // 6. Log del resultado
+      // 6. Log result
       if (result.status === 'success') {
         this.logger.log(
-          `✅ Chunks procesados exitosamente para documento ${documentId}: ` +
-            `${result.savedChunks.length} chunks creados en ${result.processingTimeMs}ms`,
+          `Chunks processed successfully for document ${documentId}: ` +
+            `${result.savedChunks.length} chunks created in ${result.processingTimeMs}ms`,
         );
 
         this.logger.log(
-          `📊 Estadísticas de chunking: ` +
-            `Promedio: ${result.chunkingResult.statistics.averageChunkSize} chars, ` +
+          `Chunking statistics: ` +
+            `Average: ${result.chunkingResult.statistics.averageChunkSize} chars, ` +
             `Min: ${result.chunkingResult.statistics.minChunkSize} chars, ` +
             `Max: ${result.chunkingResult.statistics.maxChunkSize} chars, ` +
             `Overlap: ${result.chunkingResult.statistics.actualOverlapPercentage.toFixed(1)}%`,
         );
       } else {
         this.logger.error(
-          `❌ Error procesando chunks para documento ${documentId}: ` +
+          `Error processing chunks for document ${documentId}: ` +
             `${result.errors?.join(', ')}`,
         );
       }
@@ -139,12 +142,12 @@ export class ProcessDocumentChunksUseCase {
       return result;
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : 'Error desconocido';
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Error procesando chunks para documento ${documentId}: ${errorMessage}`,
+        `Error processing chunks for document ${documentId}: ${errorMessage}`,
       );
 
-      // Retornar resultado de error estructurado
+      // Return structured error result
       return {
         chunkingResult: {
           chunks: [],
@@ -165,14 +168,14 @@ export class ProcessDocumentChunksUseCase {
   }
 
   /**
-   * Verifica si un documento ya tiene chunks procesados
+   * Check if document already has processed chunks
    */
   async hasProcessedChunks(documentId: string): Promise<boolean> {
     try {
       return await this.chunkingService.hasProcessedChunks(documentId);
     } catch (error) {
       this.logger.error(
-        `Error verificando chunks para documento ${documentId}:`,
+        `Error checking chunks for document ${documentId}:`,
         error,
       );
       return false;
@@ -180,7 +183,7 @@ export class ProcessDocumentChunksUseCase {
   }
 
   /**
-   * Re-procesa chunks de un documento existente
+   * Reprocess chunks of an existing document
    */
   async reprocessChunks(documentId: string): Promise<ProcessChunksResult> {
     return this.execute({

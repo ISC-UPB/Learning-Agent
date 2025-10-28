@@ -7,8 +7,6 @@ import {
   SunOutlined,
   MoonOutlined,
   BookOutlined,
-  FileAddOutlined,
-  CloudUploadOutlined,
   SolutionOutlined,
   MenuFoldOutlined,
   MenuOutlined,
@@ -26,16 +24,11 @@ type NavItem = { key: string; icon: React.ReactNode; label: React.ReactNode };
 
 function buildNavItems(roles: string[] | undefined): NavItem[] {
   const common: NavItem[] = [
-    { key: "/", icon: <HomeOutlined />, label: <Link to="/">Home</Link> },
-    {
-      key: "/document",
-      icon: <CloudUploadOutlined />,
-      label: <Link to="/document">Documentos</Link>,
-    },
+    { key: "/", icon: <HomeOutlined />, label: <Link to="/">Inicio</Link> },
     {
       key: "/settings",
       icon: <SettingOutlined />,
-      label: <Link to="/settings">Settings</Link>,
+      label: <Link to="/settings">Configuración</Link>,
     },
   ];
 
@@ -44,22 +37,18 @@ function buildNavItems(roles: string[] | undefined): NavItem[] {
 
   const professorOnly: NavItem[] = [
     {
-      key: "/courses",
+      key: "/professor/courses",
       icon: <SolutionOutlined />,
-      label: <Link to="/courses">Materias</Link>,
+      label: <Link to="/professor/courses">Materias</Link>,
     },
-    {
-      key: "/exams/create",
-      icon: <FileAddOutlined />,
-      label: <Link to="/exams/create">Crear Examen</Link>,
-    },
+
   ];
 
   const studentOnly: NavItem[] = [
     {
-      key: "/classes",
+      key: "/student/classes",
       icon: <BookOutlined />,
-      label: <Link to="/classes">Clases</Link>,
+      label: <Link to="/student/classes">Classes</Link>,
     },
   ];
 
@@ -79,6 +68,9 @@ export default function AppLayout() {
       return false;
     }
   });
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 999px)').matches : false
+  );
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useThemeStore();
@@ -94,6 +86,18 @@ export default function AppLayout() {
       setSystemTheme(e.matches ? "dark" : "light");
     media.addEventListener("change", listener);
     return () => media.removeEventListener("change", listener);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 999px)');
+    const onResize = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+      if (e.matches) setCollapsed(true); // auto-colapsar en móviles
+    };
+    setIsMobile(mq.matches);
+    if (mq.matches) setCollapsed(true);
+    mq.addEventListener('change', onResize);
+    return () => mq.removeEventListener('change', onResize);
   }, []);
 
   useEffect(() => {
@@ -116,6 +120,15 @@ export default function AppLayout() {
 
   return (
     <Layout className="h-screen">
+      {/* Backdrop overlay when sidebar is open on mobile */}
+      {isMobile && !collapsed && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40"
+          onClick={() => setCollapsed(true)}
+          aria-hidden
+        />
+      )}
+
       <Sider
         width={260}
         collapsedWidth={96}
@@ -124,7 +137,11 @@ export default function AppLayout() {
         onCollapse={setCollapsed}
         theme={currentTheme}
         trigger={null}
-        className="bg-[var(--app-colorBgLayout)]"
+        className={
+          "bg-[var(--app-colorBgLayout)] " +
+          (isMobile && !collapsed ? "fixed left-0 top-0 h-screen z-50 shadow-2xl" : "")
+        }
+        style={isMobile && !collapsed ? { position: 'fixed', inset: 0, left: 0, top: 0, height: '100vh' } : undefined}
       >
         <div className="h-full ">
           <div className="h-full w-full pb-2 bg-[var(--app-colorBgContainer)] shadow-sm ring-1 ring-[var(--app-colorBorder)] flex flex-col overflow-hidden">

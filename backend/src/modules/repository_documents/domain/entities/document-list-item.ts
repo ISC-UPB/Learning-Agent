@@ -7,10 +7,12 @@ export class DocumentListItem {
     public readonly size: number,
     public readonly downloadUrl: string,
     public readonly uploadedAt: Date,
+    public readonly courseId?: string,
+    public readonly classId?: string,
   ) {}
 
   /**
-   * Convierte el objeto a un formato plano para la respuesta JSON
+   * Convert the object to a flat format for the JSON response.
    */
   toJSON() {
     return {
@@ -21,6 +23,8 @@ export class DocumentListItem {
       size: this.size,
       downloadUrl: this.downloadUrl,
       uploadedAt: this.uploadedAt,
+      courseId: this.courseId,
+      classId: this.classId,
     };
   }
 }

@@ -2,55 +2,51 @@ import { randomUUID } from 'crypto';
 import { Exam } from './exam.entity';
 import { Difficulty } from './difficulty.vo';
 import { PositiveInt } from './positive-int.vo';
-import { DomainError } from './domain-error';
-import { DistributionVO, type Distribution } from './distribution.vo';
 
 export type ExamProps = {
-  subject: string;
+  title: string;
+  status?: 'Guardado' | 'Publicado';
+  classId: string;
   difficulty: string;
   attempts: number;
-  totalQuestions: number;
   timeMinutes: number;
   reference?: string | null;
-  distribution?: Distribution;
 };
 
 export class ExamFactory {
-  static create(props: ExamProps): Exam {
-    const subject = props.subject?.trim();
-    if (!subject) throw new DomainError('Materia (subject) es obligatoria y no puede estar vacía.');
-
-    const reference = props.reference?.trim();
-    if (reference && /[<>]/.test(reference)) {
-      throw new DomainError('Referencia contiene caracteres no permitidos.');
-    }
-
-    const difficulty = Difficulty.create(props.difficulty);
-    const attempts = PositiveInt.create('Intentos', props.attempts);
-    const total = PositiveInt.create('Total de preguntas', props.totalQuestions);
-    const time = PositiveInt.create('Tiempo (min)', props.timeMinutes);
-
-    let distributionVO: DistributionVO | null = null;
-    if (props.distribution) {
-      try {
-        distributionVO = new DistributionVO(props.distribution, total.getValue());
-      } catch (e: any) {
-        throw new DomainError(e?.message ?? 'Distribución inválida.');
-      }
-    }
+  static create(p: ExamProps): Exam {
+    const id = randomUUID();
+    const status = (p.status ?? 'Guardado') as 'Guardado' | 'Publicado';
+    const difficulty = Difficulty.create(p.difficulty);
+    const attempts = PositiveInt.create('attempts', p.attempts);
+    const time = PositiveInt.create('timeMinutes', p.timeMinutes);
+    const reference = p.reference ?? null;
 
     return new Exam(
-      randomUUID(),
-      subject,
+      id,
+      p.title?.trim() || 'Examen',
+      status,
+      p.classId,
       difficulty,
       attempts,
-      total,
       time,
-      reference ?? null,
-      distributionVO,      
+      reference,
       new Date(),
-      new Date(),  
-      undefined,            
+      new Date(),
     );
+  }
+  static rehydrate(raw: {
+      id: string;
+      title: string;
+      status: 'Guardado' | 'Publicado';
+      classId: string;
+      difficulty: string;
+      attempts: number;
+      timeMinutes: number;
+      reference: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }): Exam {
+      return Exam.rehydrate(raw);
   }
 }

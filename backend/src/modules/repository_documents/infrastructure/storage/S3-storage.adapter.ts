@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
   S3Client,
@@ -17,10 +17,10 @@ import {
   DocumentListItem,
 } from '../../domain/value-objects/upload-document.vo';
 import { minioConfig } from '../config/minio.config';
-import { Console } from 'console';
 
 @Injectable()
 export class S3StorageAdapter implements DocumentStoragePort {
+  private readonly logger = new Logger(S3StorageAdapter.name);
   private readonly s3Client: S3Client;
   private readonly bucketName: string;
   private readonly endpoint: string;
@@ -33,7 +33,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
         accessKeyId: minioConfig.accessKeyId,
         secretAccessKey: minioConfig.secretAccessKey,
       },
-      forcePathStyle: true, // Necesario para MinIO
+      forcePathStyle: true, // Required for MinIO
     });
 
     this.bucketName = minioConfig.bucketName;
@@ -41,27 +41,27 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Sube un documento a MinIO
-   * @param req - Datos del documento a subir
-   * @returns Documento creado con metadata
+   * Upload a document to MinIO
+   * @param req - Document data to upload
+   * @returns Created document with metadata
    */
   async uploadDocument(req: UploadDocumentRequest): Promise<Document> {
     try {
-      console.log(' MinIO Config:', {
+      this.logger.debug('MinIO Config:', {
         endpoint: this.endpoint,
         bucketName: this.bucketName,
         region: minioConfig.region,
       });
-      console.log(' Upload Request:', {
+      this.logger.debug('Upload Request:', {
         originalName: req.originalName,
         mimeType: req.mimeType,
         size: req.size,
       });
-      
-      // Generar nombre único para el archivo
+
+      // Generate unique file name
       const fileName = this.generateFileName(req.originalName);
 
-      // Configurar comando de subida
+      // Configure upload command
       const putObjectCommand = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
@@ -73,33 +73,41 @@ export class S3StorageAdapter implements DocumentStoragePort {
           uploadDate: new Date().toISOString(),
         },
       });
-      // Subir archivo a MinIO
-      await this.s3Client.send(putObjectCommand);
+      // Upload file to MinIO with error handling
+      try {
+        await this.s3Client.send(putObjectCommand);
+      } catch (storageError) {
+        this.logger.error(`Failed to upload file to storage: ${storageError.message}`);
+        throw new Error(`Storage upload failed: ${storageError.message}`);
+      }
+      
       const url = `${this.endpoint}/${this.bucketName}/${fileName}`;
-      console.log(`Documento subido exitosamente a ${url}`);
-      // Crear entidad Document (versión simple para compatibilidad)
+      this.logger.log(`Document uploaded successfully to ${url}`);
+      // Create Document entity (simple version for compatibility)
       const document = new Document(
-        '', // id - será asignado por el caso de uso
+        '', // id - it will be assigned based on the use case
         fileName,
         req.originalName,
         req.mimeType,
         req.size,
         url,
         fileName, // s3Key
-        '', // fileHash - será asignado por el caso de uso
-        '', // uploadedBy - será asignado por el caso de uso
+        '', // fileHash - it will be assigned based on the use case
+        '', // uploadedBy - it will be assigned based on the use case
       );
 
       return document;
     } catch (error) {
-      throw new Error(`Error uploading document to MinIO: ${error.message || error}`);
+      throw new Error(
+        `Error uploading document to MinIO: ${error.message || error}`,
+      );
     }
   }
 
   /**
-   * Genera una URL firmada para descargar un documento
-   * @param fileName - Nombre del archivo en MinIO
-   * @returns URL firmada válida por 1 hora
+   * Generate a signed URL for downloading a document
+   * @param fileName - File name in MinIO
+   * @returns Signed URL valid for 1 hour
    */
   async generateDownloadUrl(fileName: string): Promise<string> {
     try {
@@ -108,20 +116,22 @@ export class S3StorageAdapter implements DocumentStoragePort {
         Key: fileName,
       });
 
-      // Generar URL firmada válida por 1 hora
+      // Generate signed URL valid for 1 hour
       const signedUrl = await getSignedUrl(this.s3Client, getObjectCommand, {
         expiresIn: 3600,
       });
 
       return signedUrl;
     } catch (error) {
-      throw new Error(`Error generating download URL: ${error.message || error}`);
+      throw new Error(
+        `Error generating download URL: ${error.message || error}`,
+      );
     }
   }
 
   /**
-   * Lista todos los documentos almacenados en MinIO
-   * @returns Array de documentos con metadata básica
+   * List all documents stored in MinIO
+   * @returns Array of documents with basic metadata
    */
   async listDocuments(): Promise<DocumentListItem[]> {
     try {
@@ -134,12 +144,12 @@ export class S3StorageAdapter implements DocumentStoragePort {
         return [];
       }
 
-      // Mapear objetos S3 a DocumentListItem
+      // Map S3 objects to DocumentListItem
       const documents: DocumentListItem[] = [];
 
       for (const object of response.Contents) {
         if (!object.Key) continue;
-        if (!object.Key.toLowerCase().endsWith('.pdf')) continue; // Filtrar solo PDFs
+        if (!object.Key.toLowerCase().endsWith('.pdf')) continue; // Filter only PDFs
 
         try {
           const metadata = await this.s3Client.send(
@@ -149,11 +159,11 @@ export class S3StorageAdapter implements DocumentStoragePort {
             }),
           );
 
-          if (metadata.ContentType !== 'application/pdf') continue; // MIME PDF
+          if (metadata.ContentType !== 'application/pdf') continue;
 
           const downloadUrl = await this.generateDownloadUrl(object.Key);
 
-          // Extraer el nombre original usando el parser de nombres o los metadatos
+          // Extract the original name using the name parser or metadata
           const parsedInfo = this.parseFileName(object.Key);
           const originalName =
             metadata.Metadata?.originalName ||
@@ -162,7 +172,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
 
           documents.push(
             new DocumentListItem(
-              object.Key, // Usar el fileName como id temporalmente
+              object.Key, // Use the fileName as temporary id
               object.Key,
               originalName,
               metadata.ContentType || 'application/pdf',
@@ -172,7 +182,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
             ),
           );
         } catch {
-          console.error(`Error fetching metadata for ${object.Key}`);
+          this.logger.error(`Error fetching metadata for ${object.Key}`);
         }
       }
 
@@ -183,33 +193,33 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Genera un nombre único para el archivo combinando timestamp, UUID y nombre original
-   * @param originalFileName - Nombre original del archivo
-   * @returns Nombre único para MinIO con formato: timestamp_uuid_nombreOriginal.pdf
+   * Generate a unique file name combining timestamp, UUID, and original name
+   * @param originalFileName - Original file name
+   * @returns Unique file name for MinIO with format: timestamp_uuid_originalName.pdf
    */
   private generateFileName(originalFileName: string): string {
     const timestamp = Date.now();
     const uniqueId = randomUUID();
 
-    // Extraer la extensión del archivo
+    // Extract the file extension
     const extension = originalFileName.split('.').pop()?.toLowerCase() || 'pdf';
 
-    // Sanitizar el nombre original
+    // Sanitize the original name
     const baseName = originalFileName
-      .replace(/\.[^/.]+$/, '') // Remover extensión
-      .replace(/[^a-zA-Z0-9.-]/g, '_') // Reemplazar caracteres especiales
-      .substring(0, 50); // Limitar longitud
+      .replace(/\.[^/.]+$/, '') // Remove extension
+      .replace(/[^a-zA-Z0-9.-]/g, '_') // Replace special characters
+      .substring(0, 50); // Limit length
 
-    // Generar nombre único: timestamp_uuid_nombreOriginal.extension (SIN carpeta)
+    // Generate unique name: timestamp_uuid_originalName.extension (without folder)
     const uniqueFileName = `${timestamp}_${uniqueId}_${baseName}.${extension}`;
 
-    return uniqueFileName; // Directamente en el bucket root
+    return uniqueFileName;
   }
 
   /**
-   * Extrae información del nombre de archivo generado
-   * @param fileName - Nombre del archivo generado (ej: 1234567890_uuid_documento.pdf)
-   * @returns Objeto con timestamp, uuid, nombre original y extensión
+   * Extract information from the generated file name
+   * @param fileName - Generated file name (e.g: 1234567890_uuid_documento.pdf)
+   * @returns Object with timestamp, uuid, original name, and extension
    */
   private parseFileName(fileName: string): {
     timestamp: number;
@@ -218,7 +228,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
     extension: string;
   } | null {
     try {
-      // Sin carpeta documents/, buscar directamente el patrón
+      // Without documents/ folder, search directly for the pattern
       const match = fileName.match(/^(\d+)_([a-f0-9-]+)_(.+)\.([^.]+)$/);
 
       if (!match) {
@@ -239,9 +249,9 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Verifica si un archivo existe en MinIO
-   * @param fileName - Nombre del archivo a verificar
-   * @returns true si existe, false si no
+   * Verify if a file exists in MinIO
+   * @param fileName - File name to verify
+   * @returns true if exists, false if not
    */
   async fileExists(fileName: string): Promise<boolean> {
     try {
@@ -258,9 +268,9 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Verifica si un documento existe en MinIO
-   * @param fileName - Nombre del archivo a verificar
-   * @returns true si el archivo existe, false en caso contrario
+   * Verify if a document exists in MinIO
+   * @param fileName - File name to verify
+   * @returns true if the file exists, false otherwise
    */
   async documentExists(fileName: string): Promise<boolean> {
     try {
@@ -277,14 +287,14 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Realiza un soft delete moviendo el archivo a la carpeta deleted/
-   * @param fileName - Nombre del archivo a mover
+   * Perform a soft delete by moving the file to the deleted/ folder
+   * @param fileName - File name to move
    */
   async softDeleteDocument(fileName: string): Promise<void> {
     try {
       const deletedFileName = `deleted/${fileName}`;
 
-      // Copiar el archivo a la carpeta deleted/
+      // Copy the file to the deleted/ folder.
       const copyCommand = new CopyObjectCommand({
         Bucket: this.bucketName,
         CopySource: `${this.bucketName}/${fileName}`,
@@ -293,7 +303,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
 
       await this.s3Client.send(copyCommand);
 
-      // Eliminar el archivo original
+      // Delete the original file
       const deleteCommand = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
@@ -306,12 +316,13 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Elimina un archivo de MinIO
-   * @param fileName - Nombre del archivo a eliminar
+   * Delete a file from MinIO. Used for rollback in case of database errors.
+   * @param fileName - File name to delete
+   * @param isRollback - If true, indicates this is a rollback operation
    */
-  async deleteFile(fileName: string): Promise<void> {
+  async deleteFile(fileName: string, isRollback: boolean = false): Promise<void> {
     try {
-      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      this.logger.debug(`${isRollback ? 'Rolling back' : 'Deleting'} file ${fileName} from storage`);
       const deleteCommand = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
@@ -324,9 +335,9 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * Descarga el contenido de un archivo como Buffer
-   * @param fileName Nombre del archivo o clave S3
-   * @returns Buffer con el contenido del archivo
+   * Download the content of a file as a Buffer
+   * @param fileName File name or S3 key
+   * @returns Buffer with the file content
    */
   async downloadFileBuffer(fileName: string): Promise<Buffer> {
     try {
@@ -341,7 +352,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
         throw new Error('File content is empty');
       }
 
-      // Convertir stream a buffer
+      // Convert stream to buffer
       const chunks: Buffer[] = [];
       const stream = response.Body as any;
 
@@ -356,9 +367,9 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * verifica si un archivo existe en el storage
-   * @param s3Key clave s3 del archivo
-   * @returns true si el archivo existe
+   * Verify if a file exists in the storage
+   * @param s3Key S3 key of the file
+   * @returns true if the file exists
    */
   async exists(s3Key: string): Promise<boolean> {
     try {
@@ -375,13 +386,13 @@ export class S3StorageAdapter implements DocumentStoragePort {
   }
 
   /**
-   * mueve un archivo de una ubicación a otra en el storage
-   * @param sourceKey clave s3 de origen
-   * @param destinationKey clave s3 de destino
+   * Move a file from one location to another in the storage
+   * @param sourceKey S3 key of the source file
+   * @param destinationKey S3 key of the destination file
    */
   async moveFile(sourceKey: string, destinationKey: string): Promise<void> {
     try {
-      // copiar archivo a la nueva ubicación
+      // Copy the file to the new location
       const copyCommand = new CopyObjectCommand({
         Bucket: this.bucketName,
         CopySource: `${this.bucketName}/${sourceKey}`,
@@ -390,7 +401,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
 
       await this.s3Client.send(copyCommand);
 
-      // eliminar archivo original
+      // Delete the original file
       const deleteCommand = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: sourceKey,
@@ -399,7 +410,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
       await this.s3Client.send(deleteCommand);
     } catch (error) {
       throw new Error(
-        `error moviendo archivo de ${sourceKey} a ${destinationKey}: ${error.message}`,
+        `error moving file from ${sourceKey} to ${destinationKey}: ${error.message}`,
       );
     }
   }

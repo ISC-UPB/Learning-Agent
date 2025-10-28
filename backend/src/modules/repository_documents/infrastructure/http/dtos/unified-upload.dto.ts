@@ -1,9 +1,13 @@
 /**
- * Respuesta unificada del endpoint upload que incluye toda la funcionalidad
+ * Unified response from the upload endpoint that includes all functionalities
  */
 export class UnifiedUploadResponseDto {
   constructor(
-    public readonly status: 'uploaded' | 'restored' | 'duplicate_found' | 'similar_found',
+    public readonly status:
+      | 'uploaded'
+      | 'restored'
+      | 'duplicate_found'
+      | 'similar_found',
     public readonly message: string,
     public readonly document?: {
       id: string;
@@ -44,7 +48,7 @@ export class UnifiedUploadResponseDto {
 }
 
 /**
- * DTO para opciones del endpoint upload unificado
+ * DTO for unified upload endpoint options
  */
 export class UnifiedUploadRequestDto {
   skipSimilarityCheck?: boolean | string;
@@ -52,4 +56,6 @@ export class UnifiedUploadRequestDto {
   similarityThreshold?: number;
   maxSimilarCandidates?: number;
   autoRestoreDeleted?: boolean | string;
+  courseId?: string;
+  classId?: string;
 }

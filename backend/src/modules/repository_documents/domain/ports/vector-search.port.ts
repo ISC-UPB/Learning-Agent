@@ -1,5 +1,5 @@
 /**
- * Chunk con información de similitud
+ * Chunk with similarity information
  */
 export interface SearchResultChunk {
   id: string;
@@ -21,112 +21,112 @@ export interface SearchResultChunk {
 }
 
 /**
- * Resultado de búsqueda vectorial
+ * Vector search result
  */
 export interface VectorSearchResult {
-  /** Chunks encontrados ordenados por relevancia */
+  /** Chunks found ordered by relevance */
   chunks: SearchResultChunk[];
 
-  /** Número total de resultados */
+  /** Total number of results */
   totalResults: number;
 
-  /** Opciones aplicadas en la búsqueda */
+  /** Search options applied */
   searchOptions: VectorSearchOptions;
 
-  /** Tiempo de procesamiento en ms */
+  /** Processing time in ms */
   processingTimeMs: number;
 }
 
 /**
- * Resultado completo de búsqueda semántica
+ * Semantic search result
  */
 export interface SemanticSearchResult {
-  /** Query utilizada para la búsqueda */
+  /** Query used for the search */
   query: string;
 
-  /** Embedding generado para la query */
-  queryEmbedding: any; // EmbeddingResult - evitamos import circular
+  /** Embedding generated for the query */
+  queryEmbedding: any; // EmbeddingResult - avoid circular import
 
-  /** Resultado de la búsqueda vectorial */
+  /** Vector search result */
   searchResult: VectorSearchResult;
 
-  /** Número total de resultados */
+  /** Total number of results */
   totalResults: number;
 
-  /** Tiempo de procesamiento total */
+  /** Total processing time */
   processingTimeMs: number;
 }
 
 /**
- * Documento similar encontrado
+ * Similar document found
  */
 export interface SimilarDocument {
-  /** ID del documento */
+  /** Document ID */
   documentId: string;
 
-  /** Título del documento */
+  /** Document title */
   title?: string;
 
-  /** Nombre del archivo */
+  /** Document file name */
   fileName?: string;
 
-  /** Similitud promedio */
+  /** Average similarity */
   averageSimilarity: number;
 
-  /** Similitud máxima */
+  /** Maximum similarity */
   maxSimilarity: number;
 
-  /** Chunks más relevantes */
+  /** Most relevant chunks */
   relevantChunks: SearchResultChunk[];
 
-  /** Número total de chunks del documento */
+  /** Total number of chunks in the document */
   totalChunks: number;
 }
 
 /**
- * Opciones para búsqueda vectorial
+ * Search options
  */
 export interface VectorSearchOptions {
-  /** Número máximo de resultados a devolver */
+  /** Maximum number of results to return */
   limit?: number;
 
-  /** Umbral mínimo de similitud (0-1) */
+  /** Minimum similarity threshold (0-1) */
   similarityThreshold?: number;
 
-  /** Si incluir metadatos */
+  /** Include metadata */
   includeMetadata?: boolean;
 
-  /** Si incluir contenido completo */
+  /** Include full content */
   includeContent?: boolean;
 
-  /** IDs de documentos específicos para filtrar */
+  /** Document IDs to filter */
   documentIds?: string[];
 
-  /** Tipos de chunks a incluir */
+  /** Chunk types to include */
   chunkTypes?: string[];
 
-  /** IDs de chunks a excluir */
+  /** Chunk IDs to exclude */
   excludeChunkIds?: string[];
 
-  /** IDs de documentos a excluir */
+  /** Document IDs to exclude */
   excludeDocumentIds?: string[];
 
-  /** Si agrupar por documento */
+  /** Group by document */
   groupByDocument?: boolean;
 
-  /** Filtros adicionales */
+  /** Additional filters */
   additionalFilters?: Record<string, any>;
 }
 
 /**
- * Puerto para búsqueda vectorial y semántica
+ * Vector search port
  *
- * Define la interfaz para realizar búsquedas por similaridad
- * usando embeddings vectoriales
+ * Defines the interface for performing similarity searches
+ * using vector embeddings
  */
 export interface VectorSearchPort {
   /**
-   * Busca chunks similares usando un vector de embeddings
+   * Searches for similar chunks using an embedding vector
    */
   searchByVector(
     queryVector: number[],
@@ -134,7 +134,7 @@ export interface VectorSearchPort {
   ): Promise<VectorSearchResult>;
 
   /**
-   * Busca chunks similares convirtiendo texto a vector primero
+   * Searches for similar chunks by converting text to vector first
    */
   searchByText(
     query: string,
@@ -142,7 +142,7 @@ export interface VectorSearchPort {
   ): Promise<SemanticSearchResult>;
 
   /**
-   * Encuentra chunks similares a uno específico
+   * Finds similar chunks to a specific one
    */
   findSimilarChunks(
     chunkId: string,
@@ -150,7 +150,7 @@ export interface VectorSearchPort {
   ): Promise<VectorSearchResult>;
 
   /**
-   * Encuentra documentos similares a uno específico
+   * Finds similar documents to a specific one
    */
   findSimilarDocuments(
     documentId: string,

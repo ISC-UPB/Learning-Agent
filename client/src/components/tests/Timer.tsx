@@ -1,43 +1,23 @@
-import { useEffect, useState } from "react";
 import { theme } from "antd";
-import { useNavigate } from "react-router-dom";
 
-type Props = { questionCount?: number; onTimeUp?: () => void };
+type Props = {
+  timeLeft: number;
+  totalTime: number;
+};
 
-export function TestTimer({ questionCount = 1, onTimeUp }: Props) {
+export default function TimerDisplay({ timeLeft, totalTime }: Props) {
   const { token } = theme.useToken();
-  const navigate = useNavigate();
-  const totalTime = questionCount * 30;
-  const [timeLeft, setTimeLeft] = useState(totalTime);
-
-  useEffect(() => {
-    setTimeLeft(totalTime);
-  }, [totalTime]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          if (onTimeUp) onTimeUp();
-          navigate("/reinforcement");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [onTimeUp, navigate]);
-
-  const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
-  const seconds = String(timeLeft % 60).padStart(2, "0");
-  const isDanger = timeLeft <= 10;
+  const isDanger = timeLeft <= 30 && timeLeft > 0; 
+  const timeUsed = totalTime - timeLeft;
+  const displayTime = timeLeft > 0 ? timeLeft : timeUsed;
+  const minutes = String(Math.floor(displayTime / 60)).padStart(2, "0");
+  const seconds = String(displayTime % 60).padStart(2, "0");
 
   return (
     <div
       style={{
         position: "fixed",
-        bottom: 24,
+        top: 24,
         right: 24,
         zIndex: 1000,
         display: "flex",
@@ -48,26 +28,27 @@ export function TestTimer({ questionCount = 1, onTimeUp }: Props) {
         fontWeight: 600,
         padding: "10px 18px",
         borderRadius: token.borderRadiusLG,
-        border: `1px solid ${isDanger ? token.colorErrorBorder : token.colorBorderSecondary}`,
-        background: `${token.colorBgElevated}cc`,
+        border: `1px solid ${isDanger ? token.colorWhite : token.colorBorderSecondary}`,
+        background: isDanger ? `${token.colorError}cc` : `${token.colorBgElevated}cc`,
         backdropFilter: "blur(8px)",
-        color: isDanger ? token.colorError : token.colorText,
+        color: isDanger ? token.colorWhite : token.colorText,
         boxShadow: token.boxShadowSecondary,
         transition: "all 0.3s ease",
-        animation: isDanger ? "pulse 1s infinite" : "none"
+        animation: isDanger ? "pulse-red 1s infinite" : "none"
       }}
     >
       <span style={{ fontSize: 18 }}>⏱</span>
       {minutes}:{seconds}
       <style>
         {`
-          @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
+          @keyframes pulse-red {
+            0% { box-shadow: 0 0 0px ${token.colorError}; }
+            50% { box-shadow: 0 0 12px ${token.colorError}; }
+            100% { box-shadow: 0 0 0px ${token.colorError}; }
           }
         `}
       </style>
     </div>
   );
 }
+

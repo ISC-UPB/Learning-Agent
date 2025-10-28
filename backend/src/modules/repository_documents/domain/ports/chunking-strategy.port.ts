@@ -1,62 +1,62 @@
 import type { DocumentChunk } from '../entities/document-chunk.entity';
 
 /**
- * Configuración para la estrategia de chunking
+ * Configuration settings for the chunking strategy
  */
 export interface ChunkingConfig {
-  /** Tamaño máximo de cada chunk en caracteres */
+  /** Maximum chunk size in characters */
   maxChunkSize: number;
 
-  /** Solapamiento entre chunks para preservar contexto */
+  /** Overlap between chunks to preserve context */
   overlap: number;
 
-  /** Priorizar división por párrafos */
+  /** Prioritize paragraph division */
   respectParagraphs: boolean;
 
-  /** Priorizar división por oraciones */
+  /** Prioritize sentence division */
   respectSentences: boolean;
 
-  /** Tamaño mínimo de un chunk para ser válido */
+  /** Minimum chunk size */
   minChunkSize: number;
 }
 
 /**
- * Resultado del proceso de chunking
+ * Result of the chunking process
  */
 export interface ChunkingResult {
-  /** Lista de chunks generados */
+  /** List of generated chunks */
   chunks: DocumentChunk[];
 
-  /** Número total de chunks creados */
+  /** Total number of chunks created */
   totalChunks: number;
 
-  /** Estadísticas del proceso */
+  /** Statistics of the process */
   statistics: {
-    /** Tamaño promedio de chunks */
+    /** Average chunk size */
     averageChunkSize: number;
 
-    /** Tamaño del chunk más pequeño */
+    /** Minimum chunk size */
     minChunkSize: number;
 
-    /** Tamaño del chunk más grande */
+    /** Maximum chunk size */
     maxChunkSize: number;
 
-    /** Porcentaje de solapamiento real */
+    /** Actual overlap percentage */
     actualOverlapPercentage: number;
   };
 }
 
 /**
- * Puerto para diferentes estrategias de chunking de texto
+ * Port for different chunking strategies
  */
 export interface ChunkingStrategyPort {
   /**
-   * Divide un texto en chunks según la estrategia implementada
+   * Splits text into chunks based on the implemented strategy
    *
-   * @param documentId - ID del documento al que pertenecen los chunks
-   * @param text - Texto a dividir en chunks
-   * @param config - Configuración de chunking
-   * @returns Resultado del chunking con estadísticas
+   * @param documentId - ID of the document to which the chunks belong
+   * @param text - Text to be split into chunks
+   * @param config - Chunking configuration
+   * @returns Chunking result with statistics
    */
   chunkText(
     documentId: string,
@@ -65,15 +65,15 @@ export interface ChunkingStrategyPort {
   ): Promise<ChunkingResult>;
 
   /**
-   * Valida que la configuración de chunking sea válida
+   * Validates the chunking configuration
    *
-   * @param config - Configuración a validar
-   * @returns true si es válida, false en caso contrario
+   * @param config - Configuration to validate
+   * @returns true if valid, false otherwise
    */
   validateConfig(config: ChunkingConfig): boolean;
 
   /**
-   * Obtiene la configuración por defecto para esta estrategia
+   * Gets the default configuration for this strategy
    */
   getDefaultConfig(): ChunkingConfig;
 }

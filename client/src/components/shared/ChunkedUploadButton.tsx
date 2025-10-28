@@ -96,7 +96,7 @@ interface ChunkedUploadButtonProps {
   onPostUploadProcess?: (
     document: ChunkedUploadResult['document'],
     onProgress?: (step: string, progress: number, message: string) => void,
-    uploadStatus?: string // Agregar parámetro para el status del upload
+    uploadStatus?: string // Add parameter for upload status
   ) => Promise<unknown>;
   fileConfig: FileConfig;
   processingConfig: ProcessingConfig;
@@ -107,6 +107,8 @@ interface ChunkedUploadButtonProps {
   onUploadError?: (error: Error) => void;
   onModalClose?: () => void;
   disabled?: boolean;
+  courseId?: string;
+  classId?: string;
 }
 const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
   onPostUploadProcess,
@@ -118,7 +120,9 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
   onUploadSuccess,
   onUploadError,
   onModalClose,
-  disabled = false
+  disabled = false,
+  courseId,
+  classId
 }) => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -143,6 +147,9 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
   const { theme } = useThemeStore();
   const isDark = theme === 'dark';
 
+  // Constants
+  const BYTES_PER_MB = 1024 * 1024;
+
   const {
     showText = true,
     width,
@@ -155,13 +162,13 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
   } = buttonConfig;
 
   const {
-    title = 'Cargar Nuevo Archivo',
+    title = 'Upload New File',
     width: modalWidth = 700
   } = modalConfig;
 
   const {
-    processingText = 'Procesando archivo...',
-    successText = '¡Archivo procesado exitosamente!'
+    processingText = 'Processing file...',
+    successText = 'File processed successfully!'
   } = processingConfig;
 
   const FIXED_COLOR = token.colorBgElevated === '#141d47' ? '#5b6ef0' : '#1A2A80';
@@ -259,12 +266,12 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
     });
 
     if (!isValidType) {
-      return fileConfig.validationMessage || `Solo se permiten archivos: ${fileConfig.accept}`;
+      return fileConfig.validationMessage || `Only these file types are allowed: ${fileConfig.accept}`;
     }
 
     if (file.size > fileConfig.maxSize) {
-      const maxSizeMB = (fileConfig.maxSize / 1024 / 1024).toFixed(1);
-      return `El archivo es demasiado grande. Máximo permitido: ${maxSizeMB} MB`;
+      const maxSizeMB = (fileConfig.maxSize / BYTES_PER_MB).toFixed(1);
+      return `File is too large. Maximum allowed: ${maxSizeMB} MB`;
     }
 
     return null;
@@ -317,8 +324,19 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
       lastProgressUpdate.current = Date.now();
       speedHistory.current = [];
 
+      // Show warning for large files
+      const fileSizeMB = file.size / BYTES_PER_MB;
+      const largeFileThreshold = Number(import.meta.env.VITE_LARGE_FILE_THRESHOLD_MB) || 50;
+      if (fileSizeMB > largeFileThreshold) {
+        message.warning({
+          content: `Archivo grande detectado (${fileSizeMB.toFixed(1)} MB). El procesamiento puede tomar varios minutos. Por favor no cierre esta ventana.`,
+          duration: 8,
+          style: { marginTop: '10vh' }
+        });
+      }
+
       const options: ChunkedUploadOptions = {
-        chunkSize: fileConfig.chunkSize || 2 * 1024 * 1024,
+        chunkSize: fileConfig.chunkSize || Number(import.meta.env.VITE_DEFAULT_CHUNK_SIZE) || 2 * BYTES_PER_MB,
         maxRetries: 3,
         onProgress: handleUploadProgress,
         onChunkComplete: (chunkIndex, totalChunks) => {
@@ -327,7 +345,9 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
             chunksUploaded: chunkIndex + 1,
             totalChunks
           } : null);
-        }
+        },
+        courseId,
+        classId
       };
 
       const result = await chunkedUploadService.uploadFileWithChunks(file, options);
@@ -372,13 +392,13 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
       setCurrentPhase('error');
       setUploadProgress(0);
       setProcessingProgress(0);
-      const errorMessage = error instanceof Error ? error.message : 'Error en el procesamiento';
+      const errorMessage = error instanceof Error ? error.message : 'Processing error';
       setError(errorMessage);
       
-      // Mostrar Alert para errores de duplicados (409)
-      if (errorMessage.includes('duplicado') || errorMessage.includes('Duplicate') || errorMessage.includes('similar')) {
+      // Show Alert for duplicate errors (409)
+      if (errorMessage.includes('duplicate') || errorMessage.includes('Duplicate') || errorMessage.includes('similar')) {
         message.error({
-          content: `Documento duplicado detectado: ${errorMessage}`,
+          content: `Duplicate document detected: ${errorMessage}`,
           duration: 8,
           style: { marginTop: '10vh' }
         });
@@ -508,7 +528,7 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
             />
           </Col>
         </Row>
-        
+
         {uploadProgressInfo.totalChunks > 0 && (
           <>
             <Divider style={{ margin: '12px 0' }} />
@@ -517,6 +537,7 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
             </Text>
           </>
         )}
+        {/* Upload chunk info removed to avoid confusion */}
       </Card>
     );
   };
@@ -568,6 +589,20 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
             showIcon
             style={{ 
               marginTop: '16px',
+              fontSize: isSmallScreen ? '12px' : '14px'
+            }}
+          />
+        )}
+        
+        {/* Informative message specific for large files in processing */}
+        {currentPhase === 'processing' && selectedFile && (selectedFile.size / BYTES_PER_MB) > (Number(import.meta.env.VITE_LARGE_FILE_THRESHOLD_MB) || 50) && (
+          <Alert
+            message="Processing large file"
+            description={`This ${((selectedFile.size) / BYTES_PER_MB).toFixed(1)} MB file is being processed. Estimated time may be 5-10 minutes depending on size. Please keep this window open.`}
+            type="warning"
+            showIcon
+            style={{ 
+              marginTop: '12px',
               fontSize: isSmallScreen ? '12px' : '14px'
             }}
           />
@@ -625,7 +660,8 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
             alignItems: 'center', 
             color: isDark ? '#ffffff' : FIXED_COLOR,
             fontSize: '18px',
-            fontWeight: '600'
+            fontWeight: '600',
+            textShadow: 'none'
           }}>
             {title}
           </div>
@@ -638,8 +674,10 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
         destroyOnClose={false}
         styles={{
           header: {
-            backgroundColor: isDark ? token.colorBgContainer : '#f8f9ff',
-            borderBottom: `1px solid ${isDark ? token.colorBorder : '#e8eaed'}`
+            backgroundColor: 'transparent',
+            borderBottom: 'none',
+            boxShadow: 'none',
+            filter: 'none'
           },
           body: {
             padding: isSmallScreen ? '16px' : '24px'
@@ -684,7 +722,7 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
                   padding: isSmallScreen ? '0 8px' : '0'
                 }}>
                   {fileConfig.validationMessage || 
-                   `Archivos aceptados: ${fileConfig.accept}. Tamaño máximo: ${(fileConfig.maxSize / 1024 / 1024).toFixed(1)}MB`}
+                   `Accepted files: ${fileConfig.accept}. Maximum size: ${(fileConfig.maxSize / BYTES_PER_MB).toFixed(1)}MB`}
                 </p>
               </Dragger>
 
@@ -694,10 +732,11 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
                   icon={<PlusOutlined />}
                   onClick={handleManualSelect}
                   style={{
-                    backgroundColor: 'var(--ant-color-primary)',
-                    borderColor: 'var(--ant-color-primary)',
+                    backgroundColor: isDark ? token.colorPrimary : '#1890ff',
+                    borderColor: isDark ? token.colorPrimary : '#1890ff',
                     borderRadius: '6px',
-                    fontWeight: '500'
+                    fontWeight: '500',
+                    color: '#ffffff'
                   }}
                   size={isSmallScreen ? "middle" : "large"}
                 >
@@ -711,7 +750,7 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
               padding: isSmallScreen ? '30px 16px' : '40px 20px',
               backgroundColor: isDark ? token.colorBgElevated : '#f6ffed',
               borderRadius: '8px',
-              border: `2px solid ${isDark ? token.colorSuccess : 'var(--ant-color-success)'}`
+              border: `2px solid ${isDark ? token.colorSuccess : '#52c41a'}`
             }}>
               <CheckCircleOutlined style={{ 
                 fontSize: isSmallScreen ? '48px' : '64px', 
@@ -745,8 +784,9 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
                 type="primary"
                 onClick={handleCloseModal}
                 style={{
-                  backgroundColor: isDark ? token.colorSuccess : 'var(--ant-color-success)',
-                  borderColor: isDark ? token.colorSuccess : 'var(--ant-color-success)',
+                  backgroundColor: isDark ? token.colorSuccess : '#52c41a',
+                  borderColor: isDark ? token.colorSuccess : '#52c41a',
+                  color: '#ffffff',
                   marginTop: '16px'
                 }}
                 size={isSmallScreen ? "middle" : "large"}
@@ -802,7 +842,7 @@ const ChunkedUploadButton: React.FC<ChunkedUploadButtonProps> = ({
                     </Text>
                   </div>
                   <Text type="secondary" style={{ fontSize: isSmallScreen ? '11px' : '12px' }}>
-                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    {(selectedFile.size / BYTES_PER_MB).toFixed(2)} MB
                   </Text>
                 </div>
               )}

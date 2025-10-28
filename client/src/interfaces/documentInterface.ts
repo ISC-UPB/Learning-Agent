@@ -1,11 +1,13 @@
 export interface Document {
-  id: string; // Requerido - todos los documentos deben tener ID
+  id: string;
   fileName: string;
   originalName: string;
   mimeType: string;
   size: number;
   downloadUrl: string;
   uploadedAt: string;
+  courseId?: string;
+  classId?: string;
 }
 
 export interface DocumentListResponse {
@@ -22,7 +24,6 @@ export interface UploadResponse {
   status?: 'uploaded' | 'restored' | 'duplicate_found' | 'similar_found';
 }
 
-// Nuevas interfaces para datos extraídos
 export interface DocumentMetadata {
   title?: string;
   author?: string;

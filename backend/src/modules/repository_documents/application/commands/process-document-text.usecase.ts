@@ -3,6 +3,7 @@ import type { DocumentRepositoryPort } from '../../domain/ports/document-reposit
 import type { TextExtractionPort } from '../../domain/ports/text-extraction.port';
 import type { DocumentStoragePort } from '../../domain/ports/document-storage.port';
 import { DocumentStatus } from '../../domain/entities/document.entity';
+import { DocumentService } from '../../domain/services/document.service';
 
 @Injectable()
 export class ProcessDocumentTextUseCase {
@@ -15,46 +16,46 @@ export class ProcessDocumentTextUseCase {
   ) {}
 
   /**
-   * Procesa un documento para extraer su texto
-   * @param documentId ID del documento a procesar
-   * @returns true si se procesó exitosamente
+   * Process a document to extract its text
+   * @param documentId ID of the document to process
+   * @returns true if processed successfully
    */
   async execute(documentId: string): Promise<boolean> {
     try {
-      this.logger.log(`Iniciando procesamiento de documento: ${documentId}`);
+      this.logger.log(`Starting document processing: ${documentId}`);
 
-      // 1. Buscar el documento
+      // 1. Find the document
       const document = await this.documentRepository.findById(documentId);
       if (!document) {
-        this.logger.error(`Documento no encontrado: ${documentId}`);
+        this.logger.error(`Document not found: ${documentId}`);
         return false;
       }
 
-      // 2. Verificar que esté en estado UPLOADED
-      if (!document.isReadyForProcessing()) {
+      // 2. Verify it's in UPLOADED status
+      if (!DocumentService.isReadyForProcessing(document)) {
         this.logger.warn(
-          `Documento ${documentId} no está listo para procesamiento. Estado: ${document.status}`,
+          `Document ${documentId} is not ready for processing. Status: ${document.status}`,
         );
         return false;
       }
 
-      // 3. Marcar como PROCESSING
+      // 3. Mark as PROCESSING
       await this.documentRepository.updateStatus(
         documentId,
         DocumentStatus.PROCESSING,
       );
 
       try {
-        // 4. Descargar archivo de S3
+        // 4. Download file from S3
         const fileBuffer = await this.downloadFileFromStorage(document.s3Key);
 
-        // 5. Extraer texto del PDF
+        // 5. Extract text from PDF
         const extractedText = await this.textExtraction.extractTextFromPdf(
           fileBuffer,
           document.originalName,
         );
 
-        // 6. Actualizar documento con texto extraído
+        // 6. Update document with extracted text
         await this.documentRepository.updateExtractedText(
           documentId,
           extractedText.content,
@@ -64,37 +65,37 @@ export class ProcessDocumentTextUseCase {
           extractedText.language,
         );
 
-        // 7. Marcar como PROCESSED
+        // 7. Mark as PROCESSED
         await this.documentRepository.updateStatus(
           documentId,
           DocumentStatus.PROCESSED,
         );
 
         this.logger.log(
-          `Documento ${documentId} procesado exitosamente. ` +
-            `Texto extraído: ${extractedText.getContentLength()} caracteres, ` +
-            `${extractedText.getWordCount()} palabras`,
+          `Document ${documentId} processed successfully. ` +
+            `Extracted text: ${extractedText.getContentLength()} characters, ` +
+            `${extractedText.getWordCount()} words`,
         );
 
         return true;
       } catch (error) {
-        // En caso de error, marcar documento como ERROR
+        // In case of error, mark document as ERROR
         await this.documentRepository.updateStatus(
           documentId,
           DocumentStatus.ERROR,
         );
 
-        this.logger.error(`Error procesando documento ${documentId}`);
+        this.logger.error(`Error processing document ${documentId}`);
         throw error;
       }
     } catch {
-      this.logger.error(`Error en procesamiento de documento ${documentId}`);
+      this.logger.error(`Error in document processing ${documentId}`);
       return false;
     }
   }
 
   /**
-   * Descarga un archivo desde el storage (S3/MinIO)
+   * Download a file from storage (S3/MinIO)
    */
   private async downloadFileFromStorage(s3Key: string): Promise<Buffer> {
     try {

@@ -1,5 +1,5 @@
 # Dockerfile for NestJS backend
-FROM node:20  -alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -15,5 +15,6 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/tsconfig*.json ./
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npm run seed && npm run start:prod"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]

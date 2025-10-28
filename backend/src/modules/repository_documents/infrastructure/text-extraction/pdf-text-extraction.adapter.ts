@@ -8,32 +8,32 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   private readonly logger = new Logger(PdfTextExtractionAdapter.name);
 
   /**
-   * Extrae texto de un archivo PDF
+   * Extract text from a PDF file
    */
   async extractTextFromPdf(
     fileBuffer: Buffer,
     fileName: string,
   ): Promise<ExtractedText> {
     try {
-      this.logger.log(`Iniciando extracción de texto para: ${fileName}`);
+      this.logger.log(`Starting text extraction for: ${fileName}`);
 
-      // Validar que sea un PDF válido
+      // Validate that it's a valid PDF
       await this.validatePdfBuffer(fileBuffer);
 
-      // Extraer texto usando pdf-parse
+      // Extract text using pdf-parse
       const pdfData = await pdfParse(fileBuffer, {
-        max: 0, // Sin límite de páginas
+        max: 0, // No page limit
         pagerender: this.renderPage,
       });
 
-      // Limpiar y procesar el texto extraído
+      // Clean and process extracted text
       const cleanedText = this.cleanExtractedText(pdfData.text);
 
-      // Extraer metadatos del PDF
+      // Extract PDF metadata
       const metadata = this.extractMetadata(pdfData, fileName);
 
       this.logger.log(
-        `Texto extraído exitosamente. Páginas: ${pdfData.numpages}, Caracteres: ${cleanedText.length}`,
+        `Text extracted successfully. Pages: ${pdfData.numpages}, Characters: ${cleanedText.length}`,
       );
 
       return new ExtractedText(
@@ -52,26 +52,26 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
       );
     } catch (error) {
       this.logger.error(
-        `Error extrayendo texto de ${fileName}: ${error.message}`,
+        `Error extracting text from ${fileName}: ${error.message}`,
       );
       throw new Error(`Failed to extract text from PDF: ${error.message}`);
     }
   }
 
   /**
-   * Verifica si el archivo es válido para extracción
+   * Verify if the file is valid for extraction
    */
   async isValidForExtraction(
     fileBuffer: Buffer,
     mimeType: string,
   ): Promise<boolean> {
     try {
-      // Verificar MIME type
+      // Verify MIME type
       if (mimeType !== 'application/pdf') {
         return false;
       }
 
-      // Verificar cabecera PDF
+      // Verify PDF header
       return this.validatePdfBuffer(fileBuffer);
     } catch {
       return false;
@@ -79,7 +79,7 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   }
 
   /**
-   * Obtiene información básica del PDF sin extraer todo el texto
+   * Get basic PDF information without extracting all text
    */
   async getPdfInfo(fileBuffer: Buffer): Promise<{
     pageCount: number;
@@ -92,7 +92,7 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
       await this.validatePdfBuffer(fileBuffer);
 
       const pdfData = await pdfParse(fileBuffer, {
-        max: 1, // Solo primera página para metadatos
+        max: 1, // Only first page for metadata
       });
 
       return {
@@ -108,21 +108,21 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   }
 
   /**
-   * Valida que el buffer contenga un PDF válido
+   * Validate that the buffer contains a valid PDF
    */
   private async validatePdfBuffer(fileBuffer: Buffer): Promise<boolean> {
-    // Verificar tamaño mínimo
+    // Verify minimum size
     if (fileBuffer.length < 100) {
       throw new Error('File too small to be a valid PDF');
     }
 
-    // Verificar cabecera PDF (%PDF-)
+    // Verify PDF header (%PDF-)
     const header = fileBuffer.subarray(0, 8).toString();
     if (!header.startsWith('%PDF-')) {
       throw new Error('Invalid PDF header');
     }
 
-    // Verificar que termine con %%EOF o similar
+    // Verify that it ends with %%EOF or similar
     const tail = fileBuffer.subarray(-1024).toString();
     if (!tail.includes('%%EOF') && !tail.includes('endobj')) {
       this.logger.warn('PDF might be incomplete or corrupted');
@@ -132,10 +132,10 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   }
 
   /**
-   * Función personalizada para renderizar páginas
+   * Custom function to render pages
    */
   private renderPage = (pageData: any) => {
-    // Función para procesar el contenido de cada página
+    // Function to process the content of each page
     let renderOptions = {
       normalizeWhitespace: false,
       disableCombineTextItems: false,
@@ -159,24 +159,24 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   };
 
   /**
-   * Limpia y normaliza el texto extraído
+   * Clean and normalize the extracted text
    */
   private cleanExtractedText(rawText: string): string {
     return (
       rawText
-        // Normalizar espacios en blanco
+        // Normalize whitespace
         .replace(/\s+/g, ' ')
-        // Eliminar caracteres de control
+        // Remove control characters
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-        // Normalizar saltos de línea
+        // Normalize line breaks
         .replace(/\n\s*\n/g, '\n\n')
-        // Eliminar espacios al inicio y final
+        // Remove leading and trailing spaces
         .trim()
     );
   }
 
   /**
-   * Extrae metadatos del PDF
+   * Extract metadata from the PDF
    */
   private extractMetadata(
     pdfData: any,
@@ -189,17 +189,17 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
     const info = pdfData.info || {};
     const metadata = pdfData.metadata || {};
 
-    // Intentar extraer título
+    // Try to extract title
     let title = info.Title || metadata.Title;
     if (!title || title.trim().length === 0) {
-      // Usar nombre del archivo como título si no hay título en metadatos
+      // Use file name as title if no title in metadata
       title = fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
     }
 
-    // Extraer autor
+    // Extract author
     const author = info.Author || metadata.Author || undefined;
 
-    // Intentar detectar idioma (muy básico)
+    // Try to detect language (very basic)
     const language = this.detectLanguage(pdfData.text);
 
     return {
@@ -210,12 +210,12 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   }
 
   /**
-   * Detecta el idioma del texto de forma básica
+   * Detect the language of the text in a basic way
    */
   private detectLanguage(text: string): string {
     const sample = text.substring(0, 1000).toLowerCase();
 
-    // Palabras comunes en español
+    // Common words in Spanish
     const spanishWords = [
       'el',
       'la',
@@ -297,7 +297,7 @@ export class PdfTextExtractionAdapter implements TextExtractionPort {
   }
 
   /**
-   * Cuenta palabras en el texto
+   * Count the words in the text
    */
   private countWords(text: string): number {
     return text.trim().split(/\s+/).length;
