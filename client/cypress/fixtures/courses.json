@@ -1,0 +1,76 @@
+{
+  "courses": [
+    {
+      "id": "course-001",
+      "name": "Algoritmica 1",
+      "teacherId": "teacher-001",
+      "status": "active",
+      "hasPeriods": true,
+      "hasExams": true,
+      "createdAt": "2025-01-15T00:00:00.000Z",
+      "updatedAt": "2025-01-15T00:00:00.000Z"
+    },
+    {
+      "id": "course-002",
+      "name": "Algoritmica 2",
+      "teacherId": "teacher-001",
+      "status": "active",
+      "hasPeriods": true,
+      "hasExams": false,
+      "createdAt": "2025-02-10T00:00:00.000Z",
+      "updatedAt": "2025-02-10T00:00:00.000Z"
+    },
+    {
+      "id": "course-003",
+      "name": "Algoritmica 3",
+      "teacherId": "teacher-001",
+      "status": "active",
+      "hasPeriods": false,
+      "hasExams": false,
+      "createdAt": "2025-03-20T00:00:00.000Z",
+      "updatedAt": "2025-03-20T00:00:00.000Z"
+    },
+    {
+      "id": "course-004",
+      "name": "Estructura de Datos",
+      "teacherId": "teacher-001",
+      "status": "inactive",
+      "hasPeriods": true,
+      "hasExams": true,
+      "createdAt": "2024-08-01T00:00:00.000Z",
+      "updatedAt": "2024-12-15T00:00:00.000Z"
+    },
+    {
+      "id": "course-005",
+      "name": "Base de Datos I",
+      "teacherId": "teacher-001",
+      "status": "active",
+      "hasPeriods": true,
+      "hasExams": true,
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "course-006",
+      "name": "Programación Web",
+      "teacherId": "teacher-001",
+      "status": "active",
+      "hasPeriods": true,
+      "hasExams": false,
+      "createdAt": "2025-03-15T00:00:00.000Z",
+      "updatedAt": "2025-03-15T00:00:00.000Z"
+    }
+  ],
+  "emptyCourses": [],
+  "newCourse": {
+    "name": "Programación Móvil",
+    "teacherId": "teacher-001"
+  },
+  "teacher": {
+    "id": "teacher-001",
+    "userId": "user-docente-001",
+    "name": "Docente",
+    "lastname": "Example",
+    "email": "docente@example.com"
+  }
+}
