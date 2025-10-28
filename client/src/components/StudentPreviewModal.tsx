@@ -1,5 +1,5 @@
 import { Modal, Table, Alert, Typography, Descriptions } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { useStudentPreview } from '../hooks/useStudentPreview';
 
 const { Text } = Typography;
 
@@ -22,49 +22,7 @@ type Props = {
 export default function StudentPreviewModal({
   open, data, duplicates, meta, loading, onCancel, onConfirm,
 }: Props) {
-  const dupSet = new Set(duplicates.map((d) => String(d).trim().toLowerCase()));
-
-  const hasCorreo = data.some((r) => 'correo' in r && String(r.correo || '').trim() !== '');
-
-  const coreKeys = new Set(['nombres', 'apellidos', 'codigo', 'correo']);
-  const extraCols = Array.from(
-    data.reduce<Set<string>>((acc, row) => {
-      Object.keys(row).forEach((k) => {
-        const nk = k.trim();
-        if (!coreKeys.has(nk)) acc.add(nk);
-      });
-      return acc;
-    }, new Set<string>())
-  );
-
-  const toTitleCase = (s: any) => {
-    const str = String(s ?? '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim();
-    return str.replace(/(^|\s|[-_/])(\p{L})/gu, (sep, ch) => sep + ch.toUpperCase());
-  };
-
-  const columns: ColumnsType<RowIn> = [
-    {
-      title: 'Código',
-      dataIndex: 'codigo',
-      key: 'codigo',
-      render: (v: any) =>
-        dupSet.has(String(v || '').trim().toLowerCase())
-          ? <Text type="danger">{String(v)} (duplicado)</Text>
-          : <Text>{String(v)}</Text>,
-      width: 100,
-    },
-    { title: 'Nombre', dataIndex: 'nombres', key: 'nombres', render: (v: any) => <Text>{toTitleCase(v)}</Text> },
-    { title: 'Apellido', dataIndex: 'apellidos', key: 'apellidos', render: (v: any) => <Text>{toTitleCase(v)}</Text> },
-    ...(hasCorreo ? [{ title: 'Correo', dataIndex: 'correo', key: 'correo' } as const] : []),
-    ...extraCols.map((k) => ({
-      title: k,
-      dataIndex: k,
-      key: k,
-    })),
-  ];
+  const { columns } = useStudentPreview({data, duplicates});
 
   return (
     <Modal
@@ -123,4 +81,4 @@ export default function StudentPreviewModal({
       </div>
     </Modal>
   );
-}
+};
