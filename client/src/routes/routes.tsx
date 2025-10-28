@@ -17,6 +17,7 @@ import LoginPage from "../pages/common/login/LoginPage";
 import SettingsPage from "../pages/common/SettingsPage";
 import CoursesPage from "../pages/courses/CoursesPage";
 import UploadDocumentPage from "../pages/common/UploadDocumentPage";
+import ProfessorHome from "../pages/professor/dashboard/ProfessorHome";
 
 export const AppRoutes = () => {
   return (
@@ -35,6 +36,11 @@ export const AppRoutes = () => {
 
             {/* Professor */}
             <Route path="/professor" element={<RoleRoute allowed={["docente"]} />}>
+              <Route index element={<ProfessorHome />} />
+              <Route path="dashboard" element={<ProfessorHome />} />
+              <Route path="exams" element={<ExamManagementPage />} />
+              <Route path="exams/create" element={<ExamsCreatePage />} />
+              <Route path="academic_management" element={<Navigate to="../courses" replace />} />
               <Route path="courses" element={<CoursesPage />} />
               <Route path="courses/:courseId/documents" element={<UploadDocumentPage />} />
               <Route path="courses/:courseId/exams" element={<ExamManagementPage />} />
@@ -42,7 +48,6 @@ export const AppRoutes = () => {
               <Route path="courses/:courseId/periods/:id" element={<PeriodDetailPage />} />
               <Route path="courses/:courseId/periods/:id/documents" element={<UploadDocumentPage />} />
               <Route path="courses/:courseId/students/documents" element={<UploadDocumentPage />} />
-              <Route path="exams/create" element={<ExamsCreatePage />} />
             </Route>
 
             {/* Students */}
@@ -60,4 +65,4 @@ export const AppRoutes = () => {
       </Routes>
     </BrowserRouter>
   );
-}; 
+};
