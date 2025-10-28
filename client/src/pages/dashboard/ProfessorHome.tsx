@@ -63,13 +63,13 @@ export default function ProfessorHome() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card><Skeleton loading={loading} active><Statistic title="Courses" value={snap?.courses ?? 0} /></Skeleton></Card>
+          <Card data-testid="prof-summary-courses"><Skeleton loading={loading} active><Statistic title="Courses" value={snap?.courses ?? 0} /></Skeleton></Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card><Skeleton loading={loading} active><Statistic title="Students" value={snap?.students ?? 0} /></Skeleton></Card>
+          <Card data-testid="prof-summary-students"><Skeleton loading={loading} active><Statistic title="Students" value={snap?.students ?? 0} /></Skeleton></Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card><Skeleton loading={loading} active><Statistic title="Active exams" value={snap?.activeExams ?? 0} /></Skeleton></Card>
+          <Card data-testid="prof-summary-active-exams"><Skeleton loading={loading} active><Statistic title="Active exams" value={snap?.activeExams ?? 0} /></Skeleton></Card>
         </Col>
       </Row>
 
@@ -86,7 +86,7 @@ export default function ProfessorHome() {
           </Skeleton>
         </Card>
         <div className="lg:col-span-5 grid grid-rows-2 gap-4">
-          <Card title="Upcoming schedule" className="row-span-1">
+          <Card title="Upcoming schedule" className="row-span-1" data-testid="prof-upcoming-schedule">
             <Skeleton loading={loading} active>
               <List
                 dataSource={calendar}
@@ -102,7 +102,7 @@ export default function ProfessorHome() {
             </Skeleton>
           </Card>
 
-          <Card title="Question bank health" className="row-span-1">
+          <Card title="Question bank health" className="row-span-1" data-testid="prof-question-bank">
             <Skeleton loading={loading} active>
               <Row gutter={16}>
                 <Col span={8}><Statistic title="Topics" value={bankStats?.topics ?? 0} /></Col>
