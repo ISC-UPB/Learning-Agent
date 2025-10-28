@@ -13,6 +13,7 @@ import {
   EMBEDDING_GENERATOR_PORT,
   VECTOR_SEARCH_PORT,
   DELETED_DOCUMENT_REPOSITORY_PORT,
+  PROCESSING_JOB_REPOSITORY_PORT,
 } from './tokens';
 
 // Domain ports
@@ -35,6 +36,7 @@ import { PrismaDocumentChunkRepositoryAdapter } from './infrastructure/persisten
 import { OpenAIEmbeddingAdapter } from './infrastructure/ai/openai-embedding.adapter';
 import { PgVectorSearchAdapter } from './infrastructure/search/pgvector-search.adapter';
 import { PrismaDeletedDocumentRepositoryAdapter } from './infrastructure/persistence/prisma-deleted-document-repository.adapter';
+import { PrismaProcessingJobRepositoryAdapter } from './infrastructure/persistence/prisma-processing-job-repository.adapter';
 
 // Domain services
 import { DocumentChunkingService } from './domain/services/document-chunking.service';
@@ -88,6 +90,10 @@ import { ContextualLoggerService } from './infrastructure/services/contextual-lo
     {
       provide: DELETED_DOCUMENT_REPOSITORY_PORT,
       useClass: PrismaDeletedDocumentRepositoryAdapter,
+    },
+    {
+      provide: PROCESSING_JOB_REPOSITORY_PORT,
+      useClass: PrismaProcessingJobRepositoryAdapter,
     },
 
     // nuevos adaptadores para fase 3
@@ -343,6 +349,7 @@ import { ContextualLoggerService } from './infrastructure/services/contextual-lo
     EMBEDDING_GENERATOR_PORT,
     VECTOR_SEARCH_PORT,
     DELETED_DOCUMENT_REPOSITORY_PORT,
+    PROCESSING_JOB_REPOSITORY_PORT,
   ],
 })
 export class DocumentsModule implements NestModule {

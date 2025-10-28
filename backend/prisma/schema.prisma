@@ -199,7 +199,7 @@ model DocumentChunk {
   
   // Metadata adicional del chunk
   metadata        Json?                      // Información contextual adicional
-  
+  isActive Boolean @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   

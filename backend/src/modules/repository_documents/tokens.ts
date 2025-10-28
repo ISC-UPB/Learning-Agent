@@ -18,3 +18,8 @@ export const VECTOR_SEARCH_PORT = Symbol('VectorSearchPort');
 export const DELETED_DOCUMENT_REPOSITORY_PORT = Symbol(
   'DeletedDocumentRepositoryPort',
 );
+
+// Token para Processing Job Repository
+export const PROCESSING_JOB_REPOSITORY_PORT = Symbol(
+  'ProcessingJobRepositoryPort',
+);
