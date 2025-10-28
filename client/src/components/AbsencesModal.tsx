@@ -1,81 +1,36 @@
-import { useEffect, useState } from "react";
-import { Modal, Table, Empty, message, Typography, Button } from "antd";
-import { CalendarOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
-
+import { Modal, Table, Empty, Button } from "antd";
 import type { AbsenceRow } from "../interfaces/attendanceInterface";
 import type { StudentInfo } from "../interfaces/studentInterface";
-import useAttendance from "../hooks/useAttendance";
+import useAbsencesModal from  "../hooks/useAbsencesModal";
+import ModalHeader from "./tests/attendance/ModalHeader";
 
 interface AbsencesModalProps {
   open: boolean;
   onClose: () => void;
-  classId: string,
+  classId: string;
   student?: StudentInfo;
 }
 
-function AbsencesModal({
-  open,
-  onClose,
-  classId,
-  student,
-}: AbsencesModalProps) {
-  const { actualAbsencesDates, getAbsencesByStudent } = useAttendance();
-  const [loading, setLoading] = useState(true);
-
-  const fetchAbsencesByStudent = async (studentId: string) => {
-    const res = await getAbsencesByStudent(classId, studentId);
-
-    if (res.state == "error") {
-      message.error(res.message);
-    }
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    setLoading(true);
-    if (!student) return;
-
-    fetchAbsencesByStudent(student.userId);
-  }, [student])
-
-  const columns = [
-    {
-      title: "Fecha",
-      dataIndex: "date",
-      key: "date",
-      render: (_: any, record: AbsenceRow) => (
-        <Typography.Text>
-          {dayjs(record.date).format("DD/MM/YYYY")}
-        </Typography.Text>
-      ),
-    }
-  ];
+function AbsencesModal({ open, onClose, classId, student }: AbsencesModalProps) {
+  const { columns, width, loading, actualAbsencesDates } = useAbsencesModal({
+    classId,
+    student,
+  });
 
   return (
     <Modal
       open={open}
       onCancel={onClose}
-      title={
-        <div style={{
-          display: 'flex', alignItems: 'center', fontSize: '16px', marginBottom: '16px',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
-        }}>
-          <CalendarOutlined
-            style={{ marginRight: '8px', fontSize: '20px' }}
-          />
-          {`Ausencias de ${student?.name} ${student?.lastname}`}
-        </div>
-      }
+      title={<ModalHeader student={student} />}
       footer={[
-        <Button type="primary" onClick={onClose}>
+        <Button key="accept" type="primary" onClick={onClose}>
           Aceptar
-        </Button>
+        </Button>,
       ]}
-      width={window.innerWidth < 600 ? '60%' : '35%'}
+      width={width}
     >
       {actualAbsencesDates && actualAbsencesDates.length > 0 ? (
-        <Table
+        <Table<AbsenceRow>
           columns={columns}
           dataSource={actualAbsencesDates}
           loading={loading}
