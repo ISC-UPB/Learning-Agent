@@ -431,6 +431,118 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
+  async saveWithChunksAndEmbeddings(
+    document: Document,
+    chunks: Array<{
+      id: string;
+      content: string;
+      chunkIndex: number;
+      type: string;
+      metadata?: Record<string, any>;
+    }>,
+    embeddings: number[][],
+    extractedText?: string,
+  ): Promise<Document> {
+    if (embeddings.length !== chunks.length) {
+      throw new Error(
+        `Embeddings count (${embeddings.length}) must match chunks count (${chunks.length})`,
+      );
+    }
+
+    this.logger.log(
+      `Starting atomic save: document ${document.id} with ${chunks.length} chunks and embeddings`,
+    );
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const savedDoc = await tx.document.upsert({
+          where: { id: document.id },
+          update: {
+            originalName: document.originalName,
+            storedName: document.fileName,
+            s3Key: document.s3Key,
+            size: document.size,
+            contentType: document.mimeType,
+            fileHash: document.fileHash,
+            textHash: document.textHash,
+            extractedText: extractedText || document.extractedText,
+            status: extractedText ? 'PROCESSED' : (document.status as any),
+            uploadedBy: document.uploadedBy,
+            pageCount: document.pageCount,
+            documentTitle: document.documentTitle,
+            documentAuthor: document.documentAuthor,
+            language: document.language,
+            courseId: document.courseId,
+            classId: document.classId,
+            updatedAt: new Date(),
+          },
+          create: {
+            id: document.id,
+            originalName: document.originalName,
+            storedName: document.fileName,
+            s3Key: document.s3Key,
+            size: document.size,
+            contentType: document.mimeType,
+            fileHash: document.fileHash,
+            textHash: document.textHash,
+            extractedText: extractedText || document.extractedText,
+            status: extractedText ? 'PROCESSED' : (document.status as any),
+            uploadedBy: document.uploadedBy,
+            pageCount: document.pageCount,
+            documentTitle: document.documentTitle,
+            documentAuthor: document.documentAuthor,
+            language: document.language,
+            courseId: document.courseId,
+            classId: document.classId,
+          },
+        });
+
+        const chunkData = chunks.map((chunk) => ({
+          id: chunk.id,
+          documentId: document.id,
+          content: chunk.content,
+          chunkIndex: chunk.chunkIndex,
+          startPosition: 0,
+          endPosition: chunk.content.length,
+          type: chunk.type,
+          wordCount: chunk.content.split(/\s+/).length,
+          charCount: chunk.content.length,
+          metadata: chunk.metadata || {},
+          createdAt: new Date(),
+        }));
+
+        await tx.documentChunk.createMany({
+          data: chunkData,
+          skipDuplicates: false,
+        });
+
+        for (let i = 0; i < chunks.length; i++) {
+          await tx.$queryRaw`
+            UPDATE "document_chunks" 
+            SET embedding = ${JSON.stringify(embeddings[i])}::vector,
+                "updatedAt" = NOW()
+            WHERE id = ${chunks[i].id}
+          `;
+        }
+
+        this.logger.log(
+          `Transaction completed: document ${document.id}, ${chunks.length} chunks saved with embeddings`,
+        );
+
+        return savedDoc;
+      });
+
+      return this.mapToDomain(result);
+    } catch (error) {
+      this.logger.error(
+        `Transaction failed for document ${document.id}: ${error.message}`,
+      );
+      throw new Error(
+        `Failed to atomically save document with chunks and embeddings: ${error.message}`,
+      );
+    }
+  }
+
   /**
    * Constructs the document URL based on the S3 configuration
    */

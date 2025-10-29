@@ -165,4 +165,17 @@ export interface DocumentRepositoryPort {
     id: string,
     previousStatus: DocumentStatus,
   ): Promise<Document | undefined>;
+
+  saveWithChunksAndEmbeddings(
+    document: Document,
+    chunks: Array<{
+      id: string;
+      content: string;
+      chunkIndex: number;
+      type: string;
+      metadata?: Record<string, any>;
+    }>,
+    embeddings: number[][],
+    extractedText?: string,
+  ): Promise<Document>;
 }
