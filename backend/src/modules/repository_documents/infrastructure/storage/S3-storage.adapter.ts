@@ -58,10 +58,10 @@ export class S3StorageAdapter implements DocumentStoragePort {
         size: req.size,
       });
 
-      // Generate unique file name
+   
       const fileName = this.generateFileName(req.originalName);
 
-      // Configure upload command
+ 
       const putObjectCommand = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: fileName,
@@ -73,7 +73,7 @@ export class S3StorageAdapter implements DocumentStoragePort {
           uploadDate: new Date().toISOString(),
         },
       });
-      // Upload file to MinIO with error handling
+    
       try {
         await this.s3Client.send(putObjectCommand);
       } catch (storageError) {
@@ -83,17 +83,17 @@ export class S3StorageAdapter implements DocumentStoragePort {
       
       const url = `${this.endpoint}/${this.bucketName}/${fileName}`;
       this.logger.log(`Document uploaded successfully to ${url}`);
-      // Create Document entity (simple version for compatibility)
+     
       const document = new Document(
-        '', // id - it will be assigned based on the use case
+        '',
         fileName,
         req.originalName,
         req.mimeType,
         req.size,
         url,
-        fileName, // s3Key
-        '', // fileHash - it will be assigned based on the use case
-        '', // uploadedBy - it will be assigned based on the use case
+        fileName, 
+        '', 
+        '', 
       );
 
       return document;
@@ -363,6 +363,34 @@ export class S3StorageAdapter implements DocumentStoragePort {
       });
     } catch (error) {
       throw new Error(`Error downloading file from MinIO: ${error.message}`);
+    }
+  }
+
+  /**
+   * Obtiene el contenido de un archivo
+   * @param key Clave del archivo
+   * @returns Buffer con el contenido del archivo
+   */
+  async getFileContent(key: string): Promise<Buffer> {
+    return this.downloadFileBuffer(key);
+  }
+
+  /**
+   * Sube un archivo al storage
+   * @param key Clave del archivo
+   * @param content Contenido del archivo
+   */
+  async putFileContent(key: string, content: Buffer): Promise<void> {
+    try {
+      const putObjectCommand = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: content,
+      });
+
+      await this.s3Client.send(putObjectCommand);
+    } catch (error) {
+      throw new Error(`Error uploading file to MinIO: ${error.message}`);
     }
   }
 

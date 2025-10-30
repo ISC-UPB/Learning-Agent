@@ -74,20 +74,20 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
-  async findById(id: string): Promise<Document | undefined> {
+  async findById(id: string): Promise<Document | null> {
     try {
       const document = await this.prisma.document.findUnique({
         where: { id },
       });
 
-      return document ? this.mapToDomain(document) : undefined;
+      return document ? this.mapToDomain(document) : null;
     } catch (error) {
       this.logger.error(`Error finding document by id ${id}: ${error.message}`);
       throw new Error(`Failed to find document: ${error.message}`);
     }
   }
 
-  async findByFileHash(fileHash: string): Promise<Document | undefined> {
+  async findByFileHash(fileHash: string): Promise<Document | null> {
     try {
       const document = await this.prisma.document.findFirst({
         where: {
@@ -96,7 +96,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
         },
       });
 
-      return document ? this.mapToDomain(document) : undefined;
+      return document ? this.mapToDomain(document) : null;
     } catch (error) {
       this.logger.error(
         `Error finding document by hash ${fileHash}: ${error.message}`,
@@ -105,7 +105,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
-  async findByTextHash(textHash: string): Promise<Document | undefined> {
+  async findByTextHash(textHash: string): Promise<Document | null> {
     try {
       const document = await this.prisma.document.findFirst({
         where: {
@@ -114,7 +114,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
         },
       });
 
-      return document ? this.mapToDomain(document) : undefined;
+      return document ? this.mapToDomain(document) : null;
     } catch (error) {
       this.logger.error(
         `Error finding document by text hash ${textHash}: ${error.message}`,
@@ -123,13 +123,13 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
-  async findByS3Key(s3Key: string): Promise<Document | undefined> {
+  async findByS3Key(s3Key: string): Promise<Document | null> {
     try {
       const document = await this.prisma.document.findFirst({
         where: { s3Key },
       });
 
-      return document ? this.mapToDomain(document) : undefined;
+      return document ? this.mapToDomain(document) : null;
     } catch (error) {
       this.logger.error(
         `Error finding document by S3 key ${s3Key}: ${error.message}`,
@@ -173,7 +173,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
   async updateStatus(
     id: string,
     status: DocumentStatus,
-  ): Promise<Document | undefined> {
+  ): Promise<Document | null> {
     try {
       const updatedDocument = await this.prisma.document.update({
         where: { id },
@@ -186,7 +186,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       return this.mapToDomain(updatedDocument);
     } catch (error) {
       if (error.code === 'P2025') {
-        return undefined; // Document not found
+        return null; // Document not found
       }
       this.logger.error(
         `Error updating document status ${id}: ${error.message}`,
@@ -202,7 +202,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     documentTitle?: string,
     documentAuthor?: string,
     language?: string,
-  ): Promise<Document | undefined> {
+  ): Promise<Document | null> {
     try {
       const updatedDocument = await this.prisma.document.update({
         where: { id },
@@ -219,7 +219,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
       return this.mapToDomain(updatedDocument);
     } catch (error) {
       if (error.code === 'P2025') {
-        return undefined; // Document not found
+        return null; // Document not found
       }
       this.logger.error(
         `Error updating extracted text for document ${id}: ${error.message}`,
@@ -228,15 +228,14 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
   }
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string): Promise<void> {
     try {
       await this.prisma.document.delete({
         where: { id },
       });
-      return true;
     } catch (error) {
       if (error.code === 'P2025') {
-        return false; // Document not found
+        return; // Document not found
       }
       this.logger.error(`Error deleting document ${id}: ${error.message}`);
       throw new Error(`Failed to delete document: ${error.message}`);
@@ -413,7 +412,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
   async associateWithCourse(
     documentId: string,
     courseId: string,
-  ): Promise<Document | undefined> {
+  ): Promise<Document | null> {
     try {
       const updatedDocument = await this.prisma.document.update({
         where: { id: documentId },
@@ -422,6 +421,9 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
 
       return this.mapToDomain(updatedDocument);
     } catch (error) {
+      if (error.code === 'P2025') {
+        return null; // Document not found
+      }
       this.logger.error(
         `Error associating document ${documentId} with course ${courseId}: ${error.message}`,
       );
@@ -444,7 +446,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
   async restoreStatus(
     id: string, 
     previousStatus: DocumentStatus
-  ): Promise<Document | undefined> {
+  ): Promise<Document | null> {
     try {
       this.logger.log(`Restoring document ${id} to status ${previousStatus}`);
       const document = await this.prisma.document.update({
@@ -457,6 +459,9 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
 
       return this.mapToDomain(document);
     } catch (error) {
+      if (error.code === 'P2025') {
+        return null; // Document not found
+      }
       this.logger.error(
         `Error restoring document ${id} status: ${error.message}`,
       );

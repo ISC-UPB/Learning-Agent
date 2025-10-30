@@ -42,8 +42,9 @@ export class DocumentChunkService {
       chunkIndex,
       type,
       metadata,
+      undefined, // embedding
       createdAt || new Date(),
-      updatedAt || new Date(),
+      updatedAt || new Date()
     );
 
     if (!this.isValid(chunk)) {

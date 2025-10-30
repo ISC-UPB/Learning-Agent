@@ -50,7 +50,7 @@ export class ProcessDocumentTextUseCase {
         const fileBuffer = await this.downloadFileFromStorage(document.s3Key);
 
         // 5. Extract text from PDF
-        const extractedText = await this.textExtraction.extractTextFromPdf(
+        const { text, metadata } = await this.textExtraction.extract(
           fileBuffer,
           document.originalName,
         );
@@ -58,11 +58,11 @@ export class ProcessDocumentTextUseCase {
         // 6. Update document with extracted text
         await this.documentRepository.updateExtractedText(
           documentId,
-          extractedText.content,
-          extractedText.pageCount,
-          extractedText.documentTitle,
-          extractedText.documentAuthor,
-          extractedText.language,
+          text,
+          metadata.pageCount,
+          metadata.title,
+          metadata.author,
+          metadata.language,
         );
 
         // 7. Mark as PROCESSED
@@ -73,8 +73,8 @@ export class ProcessDocumentTextUseCase {
 
         this.logger.log(
           `Document ${documentId} processed successfully. ` +
-            `Extracted text: ${extractedText.getContentLength()} characters, ` +
-            `${extractedText.getWordCount()} words`,
+            `Extracted text: ${text.length} characters, ` +
+            `${text.split(/\s+/).length} words`,
         );
 
         return true;

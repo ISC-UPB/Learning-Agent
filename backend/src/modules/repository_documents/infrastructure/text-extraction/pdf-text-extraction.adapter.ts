@@ -1,10 +1,44 @@
 import { Injectable, Logger } from '@nestjs/common';
 import pdfParse from 'pdf-parse';
+import { createHash } from 'crypto';
 import { TextExtractionPort } from '../../domain/ports/text-extraction.port';
 import { ExtractedText } from '../../domain/value-objects/extracted-text.vo';
 
 @Injectable()
 export class PdfTextExtractionAdapter implements TextExtractionPort {
+  async extract(
+    content: Buffer,
+    mimeType: string,
+  ): Promise<{
+    text: string;
+    metadata: {
+      textHash: string;
+      pageCount: number;
+      title?: string;
+      author?: string;
+      language?: string;
+    };
+  }> {
+    if (mimeType !== 'application/pdf') {
+      throw new Error('Only PDF files are supported');
+    }
+
+    const result = await this.extractTextFromPdf(content, mimeType);
+    return {
+      text: result.content,
+      metadata: {
+        textHash: this.calculateTextHash(result.content),
+        pageCount: result.pageCount || 1,
+        title: result.documentTitle,
+        author: result.documentAuthor,
+        language: result.language
+      }
+    };
+  }
+
+  private calculateTextHash(text: string): string {
+    return createHash('sha256').update(text).digest('hex');
+  }
   private readonly logger = new Logger(PdfTextExtractionAdapter.name);
 
   /**

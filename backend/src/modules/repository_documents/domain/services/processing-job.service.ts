@@ -1,10 +1,89 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { ProcessingJobRepositoryPort } from '../ports/processing-job-repository.port';
 import {
   ProcessingJob,
   ProcessingType,
   ProcessingStatus,
 } from '../entities/processing-job.entity';
+import { randomUUID } from 'crypto';
 
+@Injectable()
 export class ProcessingJobService {
+  private readonly logger = new Logger(ProcessingJobService.name);
+
+  constructor(
+    @Inject('ProcessingJobRepositoryPort')
+    private readonly jobRepository: ProcessingJobRepositoryPort,
+  ) {}
+
+  async createJobWithDeduplication(
+    documentId: string,
+    jobType: ProcessingType,
+    jobDetails: Record<string, any>,
+  ): Promise<ProcessingJob> {
+    // Verificar duplicados basados en el hash de contenido
+    if (jobDetails.contentHash) {
+      const duplicates = await this.jobRepository.findDuplicateJobs(
+        documentId,
+        jobType,
+        jobDetails.contentHash,
+      );
+
+      if (duplicates.length > 0) {
+        this.logger.log(
+          `Found existing job for document ${documentId} with hash ${jobDetails.contentHash}`,
+        );
+        return duplicates[0]; // Retornar el job existente
+      }
+    }
+
+    // Crear nuevo job si no hay duplicados
+    const newJob = ProcessingJobService.create(
+      randomUUID(),
+      documentId,
+      jobType,
+      jobDetails,
+    );
+
+    return this.jobRepository.save(newJob);
+  }
+
+  async retryJob(jobId: string): Promise<ProcessingJob | null> {
+    const job = await this.jobRepository.findById(jobId);
+
+    if (!job || !ProcessingJobService.canRetry(job)) {
+      return null;
+    }
+
+    const retryJob = ProcessingJobService.retry(job);
+    return this.jobRepository.save(retryJob);
+  }
+
+  async updateProgress(
+    jobId: string,
+    progress: number,
+  ): Promise<ProcessingJob> {
+    const job = await this.jobRepository.findById(jobId);
+
+    if (!job) {
+      throw new Error(`Job ${jobId} not found`);
+    }
+
+    const updatedJob = ProcessingJobService.updateProgress(job, progress);
+    return this.jobRepository.save(updatedJob);
+  }
+
+  async findActiveJobs(documentId: string): Promise<ProcessingJob[]> {
+    return this.jobRepository.findActiveByDocument(documentId);
+  }
+
+  async findRetryableJobs(): Promise<ProcessingJob[]> {
+    return this.jobRepository.findRetryableJobs();
+  }
+
+  async markStaleJobs(cutoffDate: Date): Promise<number> {
+    return this.jobRepository.markStaleJobsAsFailed(cutoffDate);
+  }
   /**
    * Creates a new processing job
    */
@@ -170,6 +249,8 @@ export class ProcessingJobService {
       undefined,
       undefined,
       job.createdAt,
+      undefined,
+      job.retryCount + 1,
     );
   }
 

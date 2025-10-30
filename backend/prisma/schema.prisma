@@ -193,6 +193,7 @@ model DocumentChunk {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   content       String @db.Text // Contenido del chunk
+  chunkHash     String  // Hash del contenido para deduplicación
   chunkIndex    Int // Índice del chunk en el documento
   startPosition Int // Posición de inicio en el texto original
   endPosition   Int // Posición de fin en el texto original
@@ -220,6 +221,8 @@ model DocumentChunk {
   @@index([isActive])
   @@index([type])
   @@index([wordCount])
+  @@unique([documentId, chunkHash])
+  @@index([chunkHash])
   // Índice HNSW para búsqueda vectorial eficiente
   // CREATE INDEX CONCURRENTLY document_chunks_embedding_hnsw_idx ON "DocumentChunk" USING hnsw (embedding vector_cosine_ops);
   @@map("document_chunks")
@@ -263,13 +266,22 @@ model ProcessingJob {
   jobDetails Json? // Configuración específica del job
   result     Json? // Resultado del procesamiento
 
+  // Campos para idempotencia y retries
+  contentHash    String?    // Hash del contenido para deduplicación
+  retryCount     Int       @default(0)
+  parentJobId    String?   // ID del job original en caso de retry
+  progressMessage String?   @db.Text
+
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([documentId, jobType])
   @@index([status])
   @@index([createdAt])
+  @@index([contentHash])
+  @@index([parentJobId])
 }
 
 /**

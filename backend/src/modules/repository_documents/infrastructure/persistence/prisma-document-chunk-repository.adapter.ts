@@ -22,6 +22,14 @@ export class PrismaDocumentChunkRepositoryAdapter
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Generates a hash for deduplication of chunks
+   */
+  private generateChunkHash(content: string): string {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
    * Save a chunk to the database
    */
   async save(chunk: DocumentChunk): Promise<DocumentChunk> {
@@ -31,6 +39,7 @@ export class PrismaDocumentChunkRepositoryAdapter
           id: chunk.id,
           documentId: chunk.documentId,
           content: chunk.content,
+          chunkHash: this.generateChunkHash(chunk.content),
           chunkIndex: chunk.chunkIndex,
           startPosition: 0, // Default value
           endPosition: chunk.content.length, // Default value
@@ -67,6 +76,7 @@ export class PrismaDocumentChunkRepositoryAdapter
               id: chunk.id,
               documentId: chunk.documentId,
               content: chunk.content,
+              chunkHash: this.generateChunkHash(chunk.content),
               chunkIndex: chunk.chunkIndex,
               startPosition: 0,
               endPosition: chunk.content.length,
@@ -487,6 +497,89 @@ export class PrismaDocumentChunkRepositoryAdapter
     } catch (error) {
       this.logger.error(`Error finding chunks without embeddings:`, error);
       throw new Error(`Error finding chunks without embeddings: ${error}`);
+    }
+  }
+
+  /**
+   * Find chunks with duplicate content based on content hash
+   */
+  async findDuplicateChunks(documentId: string): Promise<DocumentChunk[]> {
+    try {
+      const duplicates = await this.prisma.$queryRaw<Array<any>>`
+        SELECT *
+        FROM document_chunks c1
+        WHERE c1."documentId" = ${documentId}
+          AND c1."isActive" = true
+          AND EXISTS (
+            SELECT 1
+            FROM document_chunks c2
+            WHERE c2."documentId" = ${documentId}
+              AND c2."isActive" = true
+              AND c2."chunkHash" = c1."chunkHash"
+              AND c2.id <> c1.id
+          )
+        ORDER BY "chunkHash", "chunkIndex"
+      `;
+
+      return duplicates.map(chunk => this.mapToEntity(chunk));
+    } catch (error) {
+      this.logger.error(`Error finding duplicate chunks for document ${documentId}:`, error);
+      throw new Error(`Error finding duplicate chunks: ${error}`);
+    }
+  }
+
+  /**
+   * Find chunks by their content hash
+   */
+  async findByContentHash(contentHash: string): Promise<DocumentChunk[]> {
+    try {
+      const chunks = await this.prisma.documentChunk.findMany({
+        where: {
+          chunkHash: contentHash,
+          isActive: true,
+        },
+      });
+
+      return chunks.map(chunk => this.mapToEntity(chunk));
+    } catch (error) {
+      this.logger.error(`Error finding chunks by hash ${contentHash}:`, error);
+      throw new Error(`Error finding chunks by hash: ${error}`);
+    }
+  }
+
+  /**
+   * Find similar chunks based on embedding vectors
+   */
+  async findSimilarChunks(
+    embedding: number[],
+    threshold: number = 0.8,
+    limit: number = 10
+  ): Promise<DocumentChunk[]> {
+    try {
+      // Using cosine similarity with pgvector
+      const similarChunks = await this.prisma.$queryRaw<Array<any>>`
+        SELECT 
+          id, 
+          "documentId", 
+          content, 
+          "chunkIndex",
+          type,
+          metadata,
+          "createdAt",
+          "updatedAt",
+          1 - (embedding <=> ${JSON.stringify(embedding)}::vector) as similarity
+        FROM document_chunks
+        WHERE embedding IS NOT NULL
+          AND "isActive" = true
+          AND 1 - (embedding <=> ${JSON.stringify(embedding)}::vector) >= ${threshold}
+        ORDER BY similarity DESC
+        LIMIT ${limit}
+      `;
+
+      return similarChunks.map(chunk => this.mapToEntity(chunk));
+    } catch (error) {
+      this.logger.error('Error finding similar chunks:', error);
+      throw new Error(`Error finding similar chunks: ${error}`);
     }
   }
 

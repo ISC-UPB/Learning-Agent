@@ -384,7 +384,7 @@ export class DocumentsController {
               mimeType: deletedResult.restoredDocument.mimeType,
               size: deletedResult.restoredDocument.size,
               downloadUrl: deletedResult.restoredDocument.url,
-              uploadedAt: deletedResult.restoredDocument.updatedAt,
+              uploadedAt: deletedResult.restoredDocument.updatedAt || new Date(),
             },
             undefined,
             undefined,
@@ -572,7 +572,7 @@ export class DocumentsController {
           mimeType: document.mimeType,
           size: document.size,
           downloadUrl: document.url,
-          uploadedAt: document.uploadedAt,
+          uploadedAt: document.uploadedAt || new Date(),
         },
       );
     } catch (error) {

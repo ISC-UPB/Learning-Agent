@@ -1,75 +1,51 @@
 import { Document, DocumentStatus } from '../entities/document.entity';
 
+/**
+ * Puerto para el repositorio de documentos
+ */
 export interface DocumentRepositoryPort {
   /**
-   * Save a document in the database
-   * @param document Document to save
-   * @returns Saved document
+   * Guarda un documento
    */
   save(document: Document): Promise<Document>;
 
   /**
-   * Find a document by ID
-   * @param id ID of the document
-   * @returns Document found or undefined
+   * Busca un documento por su ID
    */
-  findById(id: string): Promise<Document | undefined>;
+  findById(id: string): Promise<Document | null>;
 
   /**
-   * Find a document by file hash
-   * @param fileHash Hash SHA-256 of the file
-   * @returns Document found or undefined
+   * Elimina un documento
    */
-  findByFileHash(fileHash: string): Promise<Document | undefined>;
+  delete(id: string): Promise<void>;
 
   /**
-   * Find a document by text hash
-   * @param textHash Hash SHA-256 of the normalized text
-   * @returns Document found or undefined
+   * Busca un documento por su hash de archivo
    */
-  findByTextHash(textHash: string): Promise<Document | undefined>;
+  findByFileHash(fileHash: string): Promise<Document | null>;
 
   /**
-   * Find a document by S3 key
-   * @param s3Key S3 key of the file
-   * @returns Document found or undefined
+   * Busca un documento por su hash de texto
    */
-  findByS3Key(s3Key: string): Promise<Document | undefined>;
+  findByTextHash(textHash: string): Promise<Document | null>;
 
   /**
-   * Find documents by status
-   * @param status Document status
-   * @returns List of documents with the specified status
+   * Busca un documento por su clave S3
+   */
+  findByS3Key(s3Key: string): Promise<Document | null>;
+
+  /**
+   * Busca documentos por estado
    */
   findByStatus(status: DocumentStatus): Promise<Document[]>;
 
   /**
-   * Find documents uploaded by a user
-   * @param uploadedBy ID of the user
-   * @returns List of documents uploaded by the user
+   * Actualiza el estado de un documento
    */
-  findByUploadedBy(uploadedBy: string): Promise<Document[]>;
+  updateStatus(id: string, status: DocumentStatus): Promise<Document | null>;
 
   /**
-   * Update the status of a document
-   * @param id ID of the document
-   * @param status New status
-   * @returns Updated document or undefined if it doesn't exist
-   */
-  updateStatus(
-    id: string,
-    status: DocumentStatus,
-  ): Promise<Document | undefined>;
-
-  /**
-   * Update the extracted text of a document
-   * @param id ID of the document
-   * @param extractedText Extracted text
-   * @param pageCount Number of pages (optional)
-   * @param documentTitle Document title (optional)
-   * @param documentAuthor Document author (optional)
-   * @param language Document language (optional)
-   * @returns Updated document or undefined if it doesn't exist
+   * Actualiza el texto extraído de un documento
    */
   updateExtractedText(
     id: string,
@@ -78,29 +54,15 @@ export interface DocumentRepositoryPort {
     documentTitle?: string,
     documentAuthor?: string,
     language?: string,
-  ): Promise<Document | undefined>;
+  ): Promise<Document | null>;
 
   /**
-   * Delete a document from the database
-   * @param id ID of the document
-   * @returns true if deleted, false if it didn't exist
-   */
-  delete(id: string): Promise<boolean>;
-
-  /**
-   * Find all documents with pagination
-   * @param offset Number of records to skip
-   * @param limit Maximum number of records to return
-   * @returns List of documents
+   * Busca todos los documentos
    */
   findAll(offset?: number, limit?: number): Promise<Document[]>;
 
   /**
-   * Find documents with optional filters by course and/or class
-   * @param filters Optional filters
-   * @param offset Number of records to skip
-   * @param limit Maximum number of records to return
-   * @returns List of filtered documents
+   * Busca documentos con filtros
    */
   findWithFilters(
     filters?: { courseId?: string; classId?: string },
@@ -109,25 +71,12 @@ export interface DocumentRepositoryPort {
   ): Promise<Document[]>;
 
   /**
-   * Count the total number of documents
-   * @returns Total number of documents
-   */
-  count(): Promise<number>;
-
-  /**
-   * Count documents by status
-   * @param status Document status
-   * @returns Number of documents with the specified status
+   * Cuenta el número de documentos por estado
    */
   countByStatus(status: DocumentStatus): Promise<number>;
 
   /**
-   * Find documents by course ID with pagination
-   * @param courseId Course ID
-   * @param offset Number of records to skip
-   * @param limit Maximum number of records to return
-   * @param tipo Optional file type filter
-   * @returns List of documents from the course
+   * Encuentra documentos por courseId
    */
   findByCourseId(
     courseId: string,
@@ -137,32 +86,17 @@ export interface DocumentRepositoryPort {
   ): Promise<Document[]>;
 
   /**
-   * Count documents by course ID
-   * @param courseId Course ID
-   * @param tipo Optional file type filter
-   * @returns Number of documents from the course
+   * Cuenta documentos por courseId
    */
   countByCourseId(courseId: string, tipo?: string): Promise<number>;
 
   /**
-   * Associate a document with a course
-   * @param documentId Document ID
-   * @param courseId Course ID
-   * @returns Updated document or undefined if it doesn't exist
+   * Asocia un documento con un curso
    */
-  associateWithCourse(
-    documentId: string,
-    courseId: string,
-  ): Promise<Document | undefined>;
+  associateWithCourse(documentId: string, courseId: string): Promise<Document | null>;
 
   /**
-   * Restore document status in case of rollback
-   * @param id ID of the document
-   * @param previousStatus Previous status to restore
-   * @returns Restored document
+   * Restaura el estado anterior de un documento
    */
-  restoreStatus(
-    id: string,
-    previousStatus: DocumentStatus,
-  ): Promise<Document | undefined>;
+  restoreStatus(id: string, previousStatus: DocumentStatus): Promise<Document | null>;
 }

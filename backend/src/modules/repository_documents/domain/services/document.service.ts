@@ -162,6 +162,10 @@ export class DocumentService {
     newStatus: DocumentStatus,
   ): boolean {
     const validTransitions: Record<DocumentStatus, DocumentStatus[]> = {
+      [DocumentStatus.PENDING]: [
+        DocumentStatus.UPLOADED,
+        DocumentStatus.ERROR,
+      ],
       [DocumentStatus.UPLOADED]: [
         DocumentStatus.PROCESSING,
         DocumentStatus.ERROR,
@@ -175,6 +179,10 @@ export class DocumentService {
       [DocumentStatus.PROCESSED]: [
         DocumentStatus.PROCESSING,
         DocumentStatus.DELETED,
+      ],
+      [DocumentStatus.FAILED]: [
+        DocumentStatus.PROCESSING,
+        DocumentStatus.ERROR,
       ],
       [DocumentStatus.ERROR]: [
         DocumentStatus.PROCESSING,

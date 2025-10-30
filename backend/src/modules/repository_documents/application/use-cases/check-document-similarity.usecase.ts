@@ -58,7 +58,7 @@ export class CheckDocumentSimilarityUseCase {
             new DocumentMatch(
               exactMatch.id,
               exactMatch.originalName,
-              exactMatch.uploadedAt,
+              exactMatch.uploadedAt || new Date(),
               exactMatch.uploadedBy,
               'binary_hash',
               exactMatch.documentTitle,
@@ -69,12 +69,12 @@ export class CheckDocumentSimilarityUseCase {
       }
 
       // Step 2: Extract text and verify text hash
-      const extractedText = await this.textExtraction.extractTextFromPdf(
+        const { text, metadata } = await this.textExtraction.extract(
         request.file,
         request.originalName,
       );
 
-      const textHash = this.generateTextHash(extractedText.content);
+      const textHash = metadata.textHash;
 
       // Check for text hash match (same content, possibly different edition)
       const textHashMatch =
@@ -88,7 +88,7 @@ export class CheckDocumentSimilarityUseCase {
           new DocumentMatch(
             textHashMatch.id,
             textHashMatch.originalName,
-            textHashMatch.uploadedAt,
+            textHashMatch.uploadedAt || new Date(),
             textHashMatch.uploadedBy,
             'text_hash',
             textHashMatch.documentTitle,
@@ -105,7 +105,7 @@ export class CheckDocumentSimilarityUseCase {
       // Step 4: Generate chunks and embeddings for similarity verification
       const { similarCandidates, generatedData } =
         await this.findSimilarDocuments(
-          extractedText.content,
+          text,
           request.options?.similarityThreshold ?? 0.7,
           request.options?.maxCandidates ?? 10,
           request.options?.useSampling ?? true,
@@ -322,7 +322,7 @@ export class CheckDocumentSimilarityUseCase {
               new SimilarDocumentCandidate(
                 document.id,
                 document.originalName,
-                document.uploadedAt,
+                document.uploadedAt || new Date(),
                 document.uploadedBy,
                 score.finalScore,
                 score.avgSimilarity,

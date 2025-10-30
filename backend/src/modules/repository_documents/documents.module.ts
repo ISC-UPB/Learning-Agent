@@ -1,8 +1,14 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
+
+
 import { PrismaModule } from '../../core/prisma/prisma.module';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { AiConfigService } from '../../core/ai/ai.config';
 import { IdentityModule } from '../identity/identity.module';
+
+import { AuthMiddleware } from './infrastructure/http/middleware/auth.middleware';
+import { LoggingMiddleware } from './infrastructure/http/middleware/logging.middleware';
+
 import {
   FILE_STORAGE_REPO,
   DOCUMENT_REPOSITORY_PORT,
@@ -15,19 +21,17 @@ import {
   DELETED_DOCUMENT_REPOSITORY_PORT,
   DOCUMENT_INDEX_GENERATOR_PORT,
   DOCUMENT_INDEX_REPOSITORY_PORT,
+  PROCESSING_JOB_REPOSITORY_PORT,
 } from './tokens';
 
-// Domain ports
 import { EmbeddingGeneratorPort } from './domain/ports/embedding-generator.port';
 import { VectorSearchPort } from './domain/ports/vector-search.port';
 import { DocumentChunkRepositoryPort } from './domain/ports/document-chunk-repository.port';
 
-// Controllers
 import { DocumentsController } from './infrastructure/http/documents.controller';
 import { EmbeddingsController } from './infrastructure/http/embeddings.controller';
 import { ContractDocumentsController } from './infrastructure/http/contract-documents.controller';
 
-// Infrastructure adapters
 import { S3StorageAdapter } from './infrastructure/storage/S3-storage.adapter';
 import { PrismaDocumentRepositoryAdapter } from './infrastructure/persistence/prisma-document-repository.adapter';
 import { PdfTextExtractionAdapter } from './infrastructure/text-extraction/pdf-text-extraction.adapter';
@@ -37,17 +41,15 @@ import { PrismaDocumentIndexRepositoryAdapter } from './infrastructure/persisten
 import { OpenAIEmbeddingAdapter } from './infrastructure/ai/openai-embedding.adapter';
 import { PgVectorSearchAdapter } from './infrastructure/search/pgvector-search.adapter';
 import { PrismaDeletedDocumentRepositoryAdapter } from './infrastructure/persistence/prisma-deleted-document-repository.adapter';
+import { PrismaProcessingJobRepositoryAdapter } from './infrastructure/persistence/prisma-processing-job-repository.adapter';
 import { GeminiIndexGeneratorAdapter } from './infrastructure/ai/gemini-index-generator.adapter';
 
-// Domain services
 import { DocumentChunkingService } from './domain/services/document-chunking.service';
 import { DocumentEmbeddingService } from './domain/services/document-embedding.service';
 
-// Contract use cases
 import { GetDocumentsBySubjectUseCase } from './application/queries/get-documents-by-subject.usecase';
 import { GetDocumentContentUseCase } from './application/queries/get-document-content.usecase';
 
-// Use cases
 import { ListDocumentsUseCase } from './application/queries/list-documents.usecase';
 import { DeleteDocumentUseCase } from './application/commands/delete-document.usecase';
 import { UploadDocumentUseCase } from './application/commands/upload-document.usecase';
@@ -60,9 +62,6 @@ import { CheckDocumentSimilarityUseCase } from './application/use-cases/check-do
 import { CheckDeletedDocumentUseCase } from './application/use-cases/check-deleted-document.usecase';
 import { GenerateDocumentIndexUseCase } from './application/use-cases/generate-document-index.usecase';
 import { GetDocumentIndexUseCase } from './application/use-cases/get-document-index.usecase';
-import { NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
-import { AuthMiddleware } from './infrastructure/http/middleware/auth.middleware';
-import { LoggingMiddleware } from './infrastructure/http/middleware/logging.middleware';
 import { ContextualLoggerService } from './infrastructure/services/contextual-logger.service';
 import { StorageReconciliationService } from './infrastructure/services/storage-reconciliation.service';
 @Module({
@@ -96,6 +95,10 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     {
       provide: DELETED_DOCUMENT_REPOSITORY_PORT,
       useClass: PrismaDeletedDocumentRepositoryAdapter,
+    },
+    {
+      provide: PROCESSING_JOB_REPOSITORY_PORT,
+      useClass: PrismaProcessingJobRepositoryAdapter,
     },
 
     {
@@ -306,13 +309,13 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
       ],
     },
 
-    // Index generation adapter
+   
     {
       provide: DOCUMENT_INDEX_GENERATOR_PORT,
       useClass: GeminiIndexGeneratorAdapter,
     },
 
-    // Generate document index use case
+  
     {
       provide: GenerateDocumentIndexUseCase,
       useFactory: (
@@ -336,7 +339,7 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
       ],
     },
 
-    // Get document index use case
+  
     {
       provide: GetDocumentIndexUseCase,
       useFactory: (indexRepository: PrismaDocumentIndexRepositoryAdapter) => {
@@ -344,7 +347,7 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
       },
       inject: [DOCUMENT_INDEX_REPOSITORY_PORT],
     },
-    // Contract use cases
+  
     {
       provide: GetDocumentsBySubjectUseCase,
       useFactory: (
@@ -395,6 +398,7 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     EMBEDDING_GENERATOR_PORT,
     VECTOR_SEARCH_PORT,
     DELETED_DOCUMENT_REPOSITORY_PORT,
+    PROCESSING_JOB_REPOSITORY_PORT,
 
     StorageReconciliationService,
   ],

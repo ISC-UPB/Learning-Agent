@@ -131,4 +131,28 @@ export interface DocumentChunkRepositoryPort {
     documentId: string,
     options?: FindChunksOptions,
   ): Promise<FindChunksResult>;
+
+  /**
+   * Encuentra chunks duplicados basados en el hash de contenido
+   * @param documentId ID del documento para buscar duplicados
+   */
+  findDuplicateChunks(documentId: string): Promise<DocumentChunk[]>;
+
+  /**
+   * Encuentra chunks por su hash de contenido
+   * @param contentHash Hash del contenido a buscar
+   */
+  findByContentHash(contentHash: string): Promise<DocumentChunk[]>;
+
+  /**
+   * Encuentra chunks similares basados en embeddings
+   * @param embedding Vector de embedding para comparar
+   * @param threshold Umbral de similitud (0-1)
+   * @param limit Límite de resultados
+   */
+  findSimilarChunks(
+    embedding: number[],
+    threshold?: number,
+    limit?: number
+  ): Promise<DocumentChunk[]>;
 }
