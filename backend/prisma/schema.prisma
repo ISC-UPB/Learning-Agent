@@ -697,4 +697,6 @@ model RbacAudit {
   before    Json?
   after     Json?
   reason    String?
+
+  @@map("rbac_audit")
 }
