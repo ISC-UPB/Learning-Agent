@@ -4,7 +4,24 @@ import {
   ProcessingStatus,
 } from '../entities/processing-job.entity';
 
+import { DeadLetterRepository } from '../../infrastructure/persistence/prisma-dead-letter.repository';
+import { RETRY_CONFIG } from '../../infrastructure/config/retry.config';
+import { getBackoffDelay } from '../../infrastructure/services/retry.utils';
+
+/**
+ * Service to manage job lifecycle and retry/dead-letter logic.
+ */
 export class ProcessingJobService {
+  // DeadLetterRepository is injected at module initialization to avoid direct instantiation
+  private static deadLetterRepo: DeadLetterRepository;
+
+  /**
+   * Set the DeadLetterRepository implementation (called by module provider at startup)
+   */
+  static setDeadLetterRepo(repo: DeadLetterRepository) {
+    this.deadLetterRepo = repo;
+  }
+
   /**
    * Creates a new processing job
    */
@@ -174,7 +191,52 @@ export class ProcessingJobService {
   }
 
   /**
-   * Checks if the job is in a terminal state (completed or failed)
+   * Executes a job with retry and backoff policy
+   */
+  static async executeWithRetry(
+    job: ProcessingJob,
+    handler: (job: ProcessingJob) => Promise<void>,
+  ): Promise<void> {
+    let attempt = 0;
+
+    while (attempt < RETRY_CONFIG.maxAttempts) {
+      try {
+        console.log(`[JOB] Starting job ${job.id}, attempt ${attempt + 1}`);
+        const started = this.start(job);
+        await handler(started);
+
+        const completed = this.complete(started);
+        console.log(`[JOB] Job ${job.id} completed successfully`);
+        return;
+      } catch (error) {
+        attempt++;
+        const delay = getBackoffDelay(attempt);
+        console.warn(
+          `[JOB] Job ${job.id} failed (attempt ${attempt}): ${error}. Retrying in ${delay.toFixed(
+            0,
+          )}ms`,
+        );
+
+        if (attempt >= RETRY_CONFIG.maxAttempts) {
+          console.error(`[JOB] Job ${job.id} exceeded retry limit. Moving to dead-letter.`);
+          await this.deadLetterRepo.save({
+            jobId: job.id,
+            documentId: job.documentId,
+            jobType: job.jobType,
+            errorMessage: (error as Error).message,
+            attempts: attempt,
+            payload: job.jobDetails,
+          });
+          return;
+        }
+
+        await new Promise((res) => setTimeout(res, delay));
+      }
+    }
+  }
+
+  /**
+   * Checks if the job is in a terminal state
    */
   static isTerminal(job: ProcessingJob): boolean {
     return (
@@ -184,23 +246,14 @@ export class ProcessingJobService {
     );
   }
 
-  /**
-   * Checks if the job is running
-   */
   static isRunning(job: ProcessingJob): boolean {
     return job.status === ProcessingStatus.RUNNING;
   }
 
-  /**
-   * Checks if the job can be retried
-   */
   static canRetry(job: ProcessingJob): boolean {
     return job.status === ProcessingStatus.FAILED;
   }
 
-  /**
-   * Checks if the job is pending
-   */
   static isPending(job: ProcessingJob): boolean {
     return (
       job.status === ProcessingStatus.PENDING ||
@@ -208,19 +261,12 @@ export class ProcessingJobService {
     );
   }
 
-  /**
-   * Calculates the execution time of the job
-   */
   static getExecutionTime(job: ProcessingJob): number | null {
     if (!job.startedAt) return null;
-
     const endTime = job.completedAt || new Date();
     return endTime.getTime() - job.startedAt.getTime();
   }
 
-  /**
-   * Validates state transitions
-   */
   static canTransitionTo(
     currentStatus: ProcessingStatus,
     newStatus: ProcessingStatus,

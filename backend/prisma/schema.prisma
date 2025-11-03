@@ -137,6 +137,19 @@ model UserSession {
   @@index([userId, expiresAt])
 }
 
+model DeadLetter {
+  id           String   @id @default(uuid())
+  jobId        String
+  documentId   String
+  jobType      String
+  payload      Json?
+  errorMessage String?
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now())
+}
+
+
+
 model Document {
   id            String         @id @default(uuid())
   originalName  String

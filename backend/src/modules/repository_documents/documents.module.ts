@@ -3,6 +3,8 @@ import { PrismaModule } from '../../core/prisma/prisma.module';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { AiConfigService } from '../../core/ai/ai.config';
 import { IdentityModule } from '../identity/identity.module';
+import { DeadLetterRepository } from './infrastructure/persistence/prisma-dead-letter.repository';
+import { ProcessingJobService } from './domain/services/processing-job.service';
 import {
   FILE_STORAGE_REPO,
   DOCUMENT_REPOSITORY_PORT,
@@ -71,6 +73,8 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     DocumentsController,
     EmbeddingsController,
     ContractDocumentsController,
+    // Admin controller to inspect dead-letters
+    (require('./infrastructure/http/admin-dead-letters.controller').AdminDeadLettersController),
   ],
   providers: [
     AiConfigService,
@@ -96,6 +100,18 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     {
       provide: DELETED_DOCUMENT_REPOSITORY_PORT,
       useClass: PrismaDeletedDocumentRepositoryAdapter,
+    },
+    // DeadLetter repository provider (uses PrismaService)
+    DeadLetterRepository,
+
+    // Ensure ProcessingJobService receives the DeadLetterRepository instance (sets the static dependency)
+    {
+      provide: ProcessingJobService,
+      useFactory: (deadLetterRepo: DeadLetterRepository) => {
+        ProcessingJobService.setDeadLetterRepo(deadLetterRepo);
+        return ProcessingJobService;
+      },
+      inject: [DeadLetterRepository],
     },
 
     {
@@ -427,6 +443,8 @@ export class DocumentsModule implements NestModule {
         method: RequestMethod.POST,
       },
       { path: 'api/documents/:documentId/chunks', method: RequestMethod.GET },
+      // Protect admin endpoint for dead-letters
+      { path: 'admin/dead-letters', method: RequestMethod.GET },
     );
   }
 }
