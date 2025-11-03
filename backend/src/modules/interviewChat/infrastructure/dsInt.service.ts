@@ -11,7 +11,9 @@ import {
 import { ChatResponse } from 'src/modules/reinforcement/infrastructure/http/dto/chat-response';
 import { QuestionResponse } from './http/dto/question-response';
 import { GetDocumentContentUseCase } from 'src/modules/repository_documents/application/queries/get-document-content.usecase';
-import { IntExamRepository } from 'src/modules/interview-exam-db/int-exam/int-exam.repository';
+import type { InterviewQuestionRepositoryPort } from 'src/modules/interview-exam-db/domain/ports/interview-question.repository.port';
+import { InterviewQuestion } from 'src/modules/interview-exam-db/domain/entities/interview-question.entity';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class DsIntService {
@@ -19,7 +21,8 @@ export class DsIntService {
     @Inject(LLM_PORT) private readonly llm: LlmPort,
     @Inject(PROMPT_TEMPLATE_PORT)
     private readonly promptTemplatePort: PromptTemplatePort,
-    private readonly intExamRepository: IntExamRepository,
+    @Inject('INTERVIEW_QUESTION_REPOSITORY')
+    private readonly interviewQuestionRepository: InterviewQuestionRepositoryPort,
     private readonly getDocumentContentUseCase: GetDocumentContentUseCase,
   ) {}
   async generateQuestion(
@@ -27,7 +30,7 @@ export class DsIntService {
     docId: string,
   ): Promise<QuestionResponse> {
     try {
-        const openQuestions = await this.intExamRepository.findByCourseAndDocumentAndType(
+        const openQuestions = await this.interviewQuestionRepository.findByCourseAndDocumentAndType(
         courseId,
         docId,
         'open_question',
@@ -61,12 +64,17 @@ export class DsIntService {
 
       // Parse the JSON response
       const response = JSON.parse(responseContent) as QuestionResponse;
-      await this.intExamRepository.create({
-        courseId,
-        docId,
-        json: response,
-        type: 'open_question',
-      });
+      await this.interviewQuestionRepository.create(
+        InterviewQuestion.create({
+          id: randomUUID(),
+          courseId,
+          docId,
+          json: response,
+          type: 'open_question',
+          lastUsedAt: null,
+          createdAt: new Date(),
+        })
+      );
       return response;
     } catch (error) {
       console.error('OpenAI Error in generateQuestion:', error);
@@ -118,7 +126,7 @@ export class DsIntService {
     docId: string,
   ): Promise<MultipleSelectionResponse> {
     try {
-      const questions = await this.intExamRepository.findByCourseAndDocumentAndType(
+      const questions = await this.interviewQuestionRepository.findByCourseAndDocumentAndType(
         courseId,
         docId,
         'multiple_selection',
@@ -153,12 +161,17 @@ export class DsIntService {
         throw new Error('No response from AI');
       }
       const response = JSON.parse(responseContent) as MultipleSelectionResponse;
-      await this.intExamRepository.create({
-        courseId,
-        docId,
-        json: response,
-        type: 'multiple_selection',
-      });
+      await this.interviewQuestionRepository.create(
+        InterviewQuestion.create({
+          id: randomUUID(),
+          courseId,
+          docId,
+          json: response,
+          type: 'multiple_selection',
+          lastUsedAt: null,
+          createdAt: new Date(),
+        })
+      );
       return response;
     } catch (error) {
       console.error('OpenAI Error in generateMultipleSelection:', error);
@@ -169,7 +182,7 @@ export class DsIntService {
         docId: string,): Promise<DoubleOptionResponse> {
     try {
       const doubleQuestions =
-        await this.intExamRepository.findByCourseAndDocumentAndType(
+        await this.interviewQuestionRepository.findByCourseAndDocumentAndType(
           courseId,
           docId,
           'double_selection',
@@ -204,12 +217,17 @@ export class DsIntService {
         throw new Error('No response from AI');
       }
       const responseDO = JSON.parse(responseContent) as DoubleOptionResponse;
-      await this.intExamRepository.create({
-        courseId,
-        docId,
-        json: responseDO,
-        type: 'double_selection',
-      });
+      await this.interviewQuestionRepository.create(
+        InterviewQuestion.create({
+          id: randomUUID(),
+          courseId,
+          docId,
+          json: responseDO,
+          type: 'double_selection',
+          lastUsedAt: null,
+          createdAt: new Date(),
+        })
+      );
       return responseDO;
     } catch (error) {
       console.error('OpenAI Error in generateMultipleSelection:', error);
