@@ -12,7 +12,15 @@ import { getBackoffDelay } from '../../infrastructure/services/retry.utils';
  * Service to manage job lifecycle and retry/dead-letter logic.
  */
 export class ProcessingJobService {
-  private static deadLetterRepo = new DeadLetterRepository();
+  // DeadLetterRepository is injected at module initialization to avoid direct instantiation
+  private static deadLetterRepo: DeadLetterRepository;
+
+  /**
+   * Set the DeadLetterRepository implementation (called by module provider at startup)
+   */
+  static setDeadLetterRepo(repo: DeadLetterRepository) {
+    this.deadLetterRepo = repo;
+  }
 
   /**
    * Creates a new processing job

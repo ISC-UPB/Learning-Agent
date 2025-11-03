@@ -1,7 +1,10 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../../core/prisma/prisma.service';
 
+@Injectable()
 export class DeadLetterRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
   async save(data: {
     jobId: string;
     documentId: string;
@@ -10,16 +13,23 @@ export class DeadLetterRepository {
     errorMessage?: string;
     attempts: number;
   }) {
-    return prisma.deadLetter.create({
-      data,
+    return this.prisma.deadLetter.create({ data });
+  }
+
+  async findAll(options?: { skip?: number; take?: number }) {
+    const { skip, take } = options || {};
+    return this.prisma.deadLetter.findMany({
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findAll() {
-    return prisma.deadLetter.findMany();
+  async count() {
+    return this.prisma.deadLetter.count();
   }
 
   async clear() {
-    return prisma.deadLetter.deleteMany();
+    return this.prisma.deadLetter.deleteMany();
   }
 }
