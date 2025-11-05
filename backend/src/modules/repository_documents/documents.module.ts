@@ -17,6 +17,7 @@ import {
   DELETED_DOCUMENT_REPOSITORY_PORT,
   DOCUMENT_INDEX_GENERATOR_PORT,
   DOCUMENT_INDEX_REPOSITORY_PORT,
+  PROCESSING_JOB_REPOSITORY_PORT,
 } from './tokens';
 
 // Domain ports
@@ -40,6 +41,7 @@ import { OpenAIEmbeddingAdapter } from './infrastructure/ai/openai-embedding.ada
 import { PgVectorSearchAdapter } from './infrastructure/search/pgvector-search.adapter';
 import { PrismaDeletedDocumentRepositoryAdapter } from './infrastructure/persistence/prisma-deleted-document-repository.adapter';
 import { GeminiIndexGeneratorAdapter } from './infrastructure/ai/gemini-index-generator.adapter';
+import { PrismaProcessingJobRepositoryAdapter } from './infrastructure/persistence/prisma-processing-job-repository.adapter';
 
 // Domain services
 import { DocumentChunkingService } from './domain/services/document-chunking.service';
@@ -100,6 +102,10 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     {
       provide: DELETED_DOCUMENT_REPOSITORY_PORT,
       useClass: PrismaDeletedDocumentRepositoryAdapter,
+    },
+    {
+      provide: PROCESSING_JOB_REPOSITORY_PORT,
+      useClass: PrismaProcessingJobRepositoryAdapter,
     },
     // DeadLetter repository provider (uses PrismaService)
     DeadLetterRepository,

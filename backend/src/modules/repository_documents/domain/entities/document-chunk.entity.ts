@@ -3,6 +3,7 @@ export class DocumentChunk {
     public readonly id: string,
     public readonly documentId: string,
     public content: string, // No readonly para permitir modificaciones durante overlap
+    public readonly contentHash: string, // Hash SHA-256 del contenido para deduplicación
     public readonly chunkIndex: number,
     public type: string, // Cambiar de chunkType a type y no readonly
     public readonly metadata?: Record<string, any>,

@@ -206,6 +206,7 @@ model DocumentChunk {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   content       String @db.Text // Contenido del chunk
+  contentHash   String // SHA-256 hash del contenido para deduplicación
   chunkIndex    Int // Índice del chunk en el documento
   startPosition Int // Posición de inicio en el texto original
   endPosition   Int // Posición de fin en el texto original
@@ -229,10 +230,12 @@ model DocumentChunk {
   updatedAt DateTime @updatedAt
 
   @@unique([documentId, chunkIndex])
+  @@unique([documentId, contentHash]) // Prevenir duplicados con mismo hash en el mismo documento
   @@index([documentId])
   @@index([isActive])
   @@index([type])
   @@index([wordCount])
+  @@index([contentHash]) // Índice para búsqueda rápida por hash
   // Índice HNSW para búsqueda vectorial eficiente
   // CREATE INDEX CONCURRENTLY document_chunks_embedding_hnsw_idx ON "DocumentChunk" USING hnsw (embedding vector_cosine_ops);
   @@map("document_chunks")
@@ -271,16 +274,24 @@ model ProcessingJob {
   status       ProcessingStatus @default(PENDING)
   errorMessage String?          @db.Text
   progress     Int              @default(0) // Progreso 0-100
+  attemptCount Int              @default(0) // Número de intentos de ejecución
 
   // Detalles específicos del job
   jobDetails Json? // Configuración específica del job
   result     Json? // Resultado del procesamiento
 
+  // Idempotency tracking
+  lastProcessedChunkIndex Int? // Último chunk procesado (para continuar desde aquí)
+  processedChunksCount    Int  @default(0) // Contador de chunks procesados
+  processedEmbeddingsCount Int @default(0) // Contador de embeddings generados
+
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([documentId, jobType])
+  @@index([documentId, jobType, status]) // Índice para búsquedas por job activo
   @@index([status])
   @@index([createdAt])
 }

@@ -97,9 +97,19 @@ export class DocumentChunkingService {
         });
       }
 
-      const savedChunks = await this.chunkRepository.saveMany(
+      // Use deduplication method to avoid saving duplicate chunks
+      const saveResult = await this.chunkRepository.saveManyWithDeduplication(
         chunkingResult.chunks,
       );
+
+      // Log deduplication results
+      if (saveResult.skipped > 0) {
+        console.log(
+          `[IDEMPOTENCY] Skipped ${saveResult.skipped} duplicate chunks for document ${documentId}`,
+        );
+      }
+
+      const savedChunks = saveResult.saved;
 
       const processingTimeMs = Date.now() - startTime;
 

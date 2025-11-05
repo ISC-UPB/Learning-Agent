@@ -37,8 +37,13 @@ export class ProcessingJobService {
       jobType,
       ProcessingStatus.PENDING,
       0,
-      undefined,
+      0, // attemptCount
+      undefined, // errorMessage
       jobDetails,
+      undefined, // result
+      undefined, // lastProcessedChunkIndex
+      0, // processedChunksCount
+      0, // processedEmbeddingsCount
     );
   }
 
@@ -59,9 +64,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.RUNNING,
       job.progress,
+      job.attemptCount + 1, // Increment attempt count
       job.errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       new Date(),
       job.completedAt,
       job.createdAt,
@@ -71,7 +80,13 @@ export class ProcessingJobService {
   /**
    * Updates the job progress
    */
-  static updateProgress(job: ProcessingJob, progress: number): ProcessingJob {
+  static updateProgress(
+    job: ProcessingJob,
+    progress: number,
+    lastProcessedChunkIndex?: number,
+    processedChunksCount?: number,
+    processedEmbeddingsCount?: number,
+  ): ProcessingJob {
     if (!this.isRunning(job)) {
       throw new Error(
         `Cannot update progress for job in status: ${job.status}`,
@@ -86,9 +101,13 @@ export class ProcessingJobService {
       job.jobType,
       job.status,
       validProgress,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       job.result,
+      lastProcessedChunkIndex ?? job.lastProcessedChunkIndex,
+      processedChunksCount ?? job.processedChunksCount,
+      processedEmbeddingsCount ?? job.processedEmbeddingsCount,
       job.startedAt,
       job.completedAt,
       job.createdAt,
@@ -112,9 +131,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.COMPLETED,
       100,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -135,9 +158,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.FAILED,
       job.progress,
+      job.attemptCount,
       errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -158,9 +185,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.CANCELLED,
       job.progress,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -181,9 +212,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.RETRYING,
       0,
+      job.attemptCount, // Keep attempt count for retry
       undefined,
       job.jobDetails,
       undefined,
+      job.lastProcessedChunkIndex, // Preserve progress for resume
+      job.processedChunksCount, // Preserve progress for resume
+      job.processedEmbeddingsCount, // Preserve progress for resume
       undefined,
       undefined,
       job.createdAt,

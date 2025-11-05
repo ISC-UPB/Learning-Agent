@@ -31,6 +31,7 @@ export class PrismaDocumentChunkRepositoryAdapter
           id: chunk.id,
           documentId: chunk.documentId,
           content: chunk.content,
+          contentHash: chunk.contentHash,
           chunkIndex: chunk.chunkIndex,
           startPosition: 0, // Default value
           endPosition: chunk.content.length, // Default value
@@ -67,6 +68,7 @@ export class PrismaDocumentChunkRepositoryAdapter
               id: chunk.id,
               documentId: chunk.documentId,
               content: chunk.content,
+              contentHash: chunk.contentHash,
               chunkIndex: chunk.chunkIndex,
               startPosition: 0,
               endPosition: chunk.content.length,
@@ -492,6 +494,123 @@ export class PrismaDocumentChunkRepositoryAdapter
 
   // ============ PRIVATE METHODS ============
 
+  // ============ DEDUPLICATION METHODS ============
+
+  /**
+   * Find a chunk by its content hash to detect duplicates
+   */
+  async findByContentHash(
+    documentId: string,
+    contentHash: string,
+  ): Promise<DocumentChunk | null> {
+    try {
+      const chunk = await this.prisma.documentChunk.findFirst({
+        where: {
+          documentId,
+          contentHash,
+          isActive: true,
+        },
+      });
+
+      return chunk ? this.mapToEntity(chunk) : null;
+    } catch (error) {
+      this.logger.error(
+        `Error finding chunk by hash for document ${documentId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Find multiple chunks by their content hashes (batch operation)
+   */
+  async findByContentHashes(
+    documentId: string,
+    contentHashes: string[],
+  ): Promise<DocumentChunk[]> {
+    if (contentHashes.length === 0) {
+      return [];
+    }
+
+    try {
+      const chunks = await this.prisma.documentChunk.findMany({
+        where: {
+          documentId,
+          contentHash: { in: contentHashes },
+          isActive: true,
+        },
+      });
+
+      return chunks.map((chunk) => this.mapToEntity(chunk));
+    } catch (error) {
+      this.logger.error(
+        `Error finding chunks by hashes for document ${documentId}:`,
+        error,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Save chunks with deduplication - skips chunks with existing hashes
+   */
+  async saveManyWithDeduplication(chunks: DocumentChunk[]): Promise<{
+    saved: DocumentChunk[];
+    skipped: number;
+    duplicateHashes: string[];
+  }> {
+    if (chunks.length === 0) {
+      return { saved: [], skipped: 0, duplicateHashes: [] };
+    }
+
+    try {
+      const documentId = chunks[0].documentId;
+      const contentHashes = chunks.map((c) => c.contentHash);
+
+      this.logger.log(
+        `Checking for duplicate chunks in document ${documentId}...`,
+      );
+
+      // Find existing chunks by hash
+      const existingChunks = await this.findByContentHashes(
+        documentId,
+        contentHashes,
+      );
+      const existingHashes = new Set(
+        existingChunks.map((c) => c.contentHash),
+      );
+
+      // Filter out duplicates
+      const chunksToSave = chunks.filter(
+        (chunk) => !existingHashes.has(chunk.contentHash),
+      );
+      const duplicateHashes = Array.from(existingHashes);
+
+      this.logger.log(
+        `Found ${existingChunks.length} duplicate chunks. Saving ${chunksToSave.length} new chunks.`,
+      );
+
+      // Save only new chunks
+      const savedChunks =
+        chunksToSave.length > 0 ? await this.saveMany(chunksToSave) : [];
+
+      return {
+        saved: savedChunks,
+        skipped: existingChunks.length,
+        duplicateHashes,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error saving chunks with deduplication:`,
+        error,
+      );
+      throw new Error(`Error saving chunks with deduplication: ${error}`);
+    }
+  }
+
+  // ============ PRIVATE METHODS ============
+
   /**
    * Maps the result of Prisma to the domain entity
    */
@@ -500,6 +619,7 @@ export class PrismaDocumentChunkRepositoryAdapter
       prismaChunk.id,
       prismaChunk.documentId,
       prismaChunk.content,
+      prismaChunk.contentHash,
       prismaChunk.chunkIndex,
       prismaChunk.type,
       prismaChunk.metadata || {},
