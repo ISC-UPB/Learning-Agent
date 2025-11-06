@@ -87,8 +87,17 @@ export class DocumentEmbeddingService {
 
       chunks = this.applyChunkFilters(chunks, options.chunkFilters);
 
+      // Apply idempotency: skip chunks with existing embeddings unless explicitly replacing
       if (!options.replaceExisting) {
+        const originalCount = chunks.length;
         chunks = await this.filterChunksWithoutEmbeddings(chunks);
+        const skippedCount = originalCount - chunks.length;
+
+        if (skippedCount > 0) {
+          this.logger.log(
+            `[IDEMPOTENCY] Skipped ${skippedCount} chunks with existing embeddings for document ${documentId}`,
+          );
+        }
       }
 
       const validChunks = chunks.filter((chunk) =>

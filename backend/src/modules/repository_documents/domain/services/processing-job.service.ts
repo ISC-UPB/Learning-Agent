@@ -5,11 +5,10 @@ import {
 } from '../entities/processing-job.entity';
 
 import { DeadLetterRepository } from '../../infrastructure/persistence/prisma-dead-letter.repository';
-import { RETRY_CONFIG } from '../../infrastructure/config/retry.config';
-import { getBackoffDelay } from '../../infrastructure/services/retry.utils';
 
 /**
- * Service to manage job lifecycle and retry/dead-letter logic.
+ * Service to manage job lifecycle transitions (domain logic only).
+ * Retry and backoff policies are handled by RetryService (infrastructure).
  */
 export class ProcessingJobService {
   // DeadLetterRepository is injected at module initialization to avoid direct instantiation
@@ -17,9 +16,23 @@ export class ProcessingJobService {
 
   /**
    * Set the DeadLetterRepository implementation (called by module provider at startup)
+   * @throws Error if called without a valid repository
    */
   static setDeadLetterRepo(repo: DeadLetterRepository) {
+    if (!repo) {
+      throw new Error('[FATAL] DeadLetterRepository cannot be null. Ensure it is properly wired in documents.module.ts');
+    }
     this.deadLetterRepo = repo;
+  }
+
+  /**
+   * Validates that DeadLetterRepository has been injected
+   * @throws Error if repository is not initialized
+   */
+  static validateDependencies() {
+    if (!this.deadLetterRepo) {
+      throw new Error('[FATAL] ProcessingJobService.deadLetterRepo not initialized. Call setDeadLetterRepo() during module initialization.');
+    }
   }
 
   /**
@@ -37,8 +50,13 @@ export class ProcessingJobService {
       jobType,
       ProcessingStatus.PENDING,
       0,
-      undefined,
+      0, // attemptCount
+      undefined, // errorMessage
       jobDetails,
+      undefined, // result
+      undefined, // lastProcessedChunkIndex
+      0, // processedChunksCount
+      0, // processedEmbeddingsCount
     );
   }
 
@@ -59,9 +77,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.RUNNING,
       job.progress,
+      job.attemptCount + 1, // Increment attempt count
       job.errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       new Date(),
       job.completedAt,
       job.createdAt,
@@ -71,7 +93,13 @@ export class ProcessingJobService {
   /**
    * Updates the job progress
    */
-  static updateProgress(job: ProcessingJob, progress: number): ProcessingJob {
+  static updateProgress(
+    job: ProcessingJob,
+    progress: number,
+    lastProcessedChunkIndex?: number,
+    processedChunksCount?: number,
+    processedEmbeddingsCount?: number,
+  ): ProcessingJob {
     if (!this.isRunning(job)) {
       throw new Error(
         `Cannot update progress for job in status: ${job.status}`,
@@ -86,9 +114,13 @@ export class ProcessingJobService {
       job.jobType,
       job.status,
       validProgress,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       job.result,
+      lastProcessedChunkIndex ?? job.lastProcessedChunkIndex,
+      processedChunksCount ?? job.processedChunksCount,
+      processedEmbeddingsCount ?? job.processedEmbeddingsCount,
       job.startedAt,
       job.completedAt,
       job.createdAt,
@@ -112,9 +144,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.COMPLETED,
       100,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -135,9 +171,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.FAILED,
       job.progress,
+      job.attemptCount,
       errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -158,9 +198,13 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.CANCELLED,
       job.progress,
+      job.attemptCount,
       job.errorMessage,
       job.jobDetails,
       job.result,
+      job.lastProcessedChunkIndex,
+      job.processedChunksCount,
+      job.processedEmbeddingsCount,
       job.startedAt,
       new Date(),
       job.createdAt,
@@ -181,58 +225,17 @@ export class ProcessingJobService {
       job.jobType,
       ProcessingStatus.RETRYING,
       0,
+      job.attemptCount, // Keep attempt count for retry
       undefined,
       job.jobDetails,
       undefined,
+      job.lastProcessedChunkIndex, // Preserve progress for resume
+      job.processedChunksCount, // Preserve progress for resume
+      job.processedEmbeddingsCount, // Preserve progress for resume
       undefined,
       undefined,
       job.createdAt,
     );
-  }
-
-  /**
-   * Executes a job with retry and backoff policy
-   */
-  static async executeWithRetry(
-    job: ProcessingJob,
-    handler: (job: ProcessingJob) => Promise<void>,
-  ): Promise<void> {
-    let attempt = 0;
-
-    while (attempt < RETRY_CONFIG.maxAttempts) {
-      try {
-        console.log(`[JOB] Starting job ${job.id}, attempt ${attempt + 1}`);
-        const started = this.start(job);
-        await handler(started);
-
-        const completed = this.complete(started);
-        console.log(`[JOB] Job ${job.id} completed successfully`);
-        return;
-      } catch (error) {
-        attempt++;
-        const delay = getBackoffDelay(attempt);
-        console.warn(
-          `[JOB] Job ${job.id} failed (attempt ${attempt}): ${error}. Retrying in ${delay.toFixed(
-            0,
-          )}ms`,
-        );
-
-        if (attempt >= RETRY_CONFIG.maxAttempts) {
-          console.error(`[JOB] Job ${job.id} exceeded retry limit. Moving to dead-letter.`);
-          await this.deadLetterRepo.save({
-            jobId: job.id,
-            documentId: job.documentId,
-            jobType: job.jobType,
-            errorMessage: (error as Error).message,
-            attempts: attempt,
-            payload: job.jobDetails,
-          });
-          return;
-        }
-
-        await new Promise((res) => setTimeout(res, delay));
-      }
-    }
   }
 
   /**
@@ -242,7 +245,8 @@ export class ProcessingJobService {
     return (
       job.status === ProcessingStatus.COMPLETED ||
       job.status === ProcessingStatus.FAILED ||
-      job.status === ProcessingStatus.CANCELLED
+      job.status === ProcessingStatus.CANCELLED ||
+      job.status === ProcessingStatus.DEAD_LETTER
     );
   }
 
@@ -282,14 +286,20 @@ export class ProcessingJobService {
         ProcessingStatus.CANCELLED,
       ],
       [ProcessingStatus.COMPLETED]: [],
-      [ProcessingStatus.FAILED]: [ProcessingStatus.RETRYING],
+      [ProcessingStatus.FAILED]: [
+        ProcessingStatus.RETRYING,
+        ProcessingStatus.DEAD_LETTER,
+      ],
       [ProcessingStatus.CANCELLED]: [],
       [ProcessingStatus.RETRYING]: [
         ProcessingStatus.RUNNING,
         ProcessingStatus.CANCELLED,
+        ProcessingStatus.DEAD_LETTER,
       ],
+      [ProcessingStatus.DEAD_LETTER]: [],
     };
 
     return validTransitions[currentStatus]?.includes(newStatus) ?? false;
   }
 }
+

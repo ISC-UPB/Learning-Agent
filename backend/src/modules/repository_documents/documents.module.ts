@@ -17,6 +17,7 @@ import {
   DELETED_DOCUMENT_REPOSITORY_PORT,
   DOCUMENT_INDEX_GENERATOR_PORT,
   DOCUMENT_INDEX_REPOSITORY_PORT,
+  PROCESSING_JOB_REPOSITORY_PORT,
 } from './tokens';
 
 // Domain ports
@@ -40,10 +41,13 @@ import { OpenAIEmbeddingAdapter } from './infrastructure/ai/openai-embedding.ada
 import { PgVectorSearchAdapter } from './infrastructure/search/pgvector-search.adapter';
 import { PrismaDeletedDocumentRepositoryAdapter } from './infrastructure/persistence/prisma-deleted-document-repository.adapter';
 import { GeminiIndexGeneratorAdapter } from './infrastructure/ai/gemini-index-generator.adapter';
+import { PrismaProcessingJobRepositoryAdapter } from './infrastructure/persistence/prisma-processing-job-repository.adapter';
 
 // Domain services
 import { DocumentChunkingService } from './domain/services/document-chunking.service';
 import { DocumentEmbeddingService } from './domain/services/document-embedding.service';
+import { RetryService } from './domain/services/retry.service';
+import { DeadLetterQueueService } from './domain/services/dead-letter-queue.service';
 
 // Contract use cases
 import { GetDocumentsBySubjectUseCase } from './application/queries/get-documents-by-subject.usecase';
@@ -101,14 +105,26 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
       provide: DELETED_DOCUMENT_REPOSITORY_PORT,
       useClass: PrismaDeletedDocumentRepositoryAdapter,
     },
+    {
+      provide: PROCESSING_JOB_REPOSITORY_PORT,
+      useClass: PrismaProcessingJobRepositoryAdapter,
+    },
     // DeadLetter repository provider (uses PrismaService)
     DeadLetterRepository,
+
+    // RetryService - injectable service for backoff and delay logic
+    RetryService,
+
+    // DeadLetterQueueService - orchestrates job retry and DLQ operations
+    DeadLetterQueueService,
 
     // Ensure ProcessingJobService receives the DeadLetterRepository instance (sets the static dependency)
     {
       provide: ProcessingJobService,
       useFactory: (deadLetterRepo: DeadLetterRepository) => {
         ProcessingJobService.setDeadLetterRepo(deadLetterRepo);
+        // Validate dependencies are properly wired
+        ProcessingJobService.validateDependencies();
         return ProcessingJobService;
       },
       inject: [DeadLetterRepository],

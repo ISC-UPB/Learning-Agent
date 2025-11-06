@@ -5,12 +5,17 @@ export class ProcessingJob {
     public readonly jobType: ProcessingType,
     public readonly status: ProcessingStatus = ProcessingStatus.PENDING,
     public readonly progress: number = 0,
+    public readonly attemptCount: number = 0,
     public readonly errorMessage?: string,
     public readonly jobDetails?: Record<string, any>,
     public readonly result?: Record<string, any>,
+    public readonly lastProcessedChunkIndex?: number,
+    public readonly processedChunksCount: number = 0,
+    public readonly processedEmbeddingsCount: number = 0,
     public readonly startedAt?: Date,
     public readonly completedAt?: Date,
     public readonly createdAt: Date = new Date(),
+    public readonly updatedAt: Date = new Date(),
   ) {}
 }
 
@@ -29,4 +34,5 @@ export enum ProcessingStatus {
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
   RETRYING = 'RETRYING',
+  DEAD_LETTER = 'DEAD_LETTER',
 }

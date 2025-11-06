@@ -1,4 +1,5 @@
 import { DocumentChunk } from '../entities/document-chunk.entity';
+import { generateContentHash } from '../../infrastructure/utils/hash.utils';
 
 export class DocumentChunkService {
   /**
@@ -35,10 +36,14 @@ export class DocumentChunkService {
     createdAt?: Date,
     updatedAt?: Date,
   ): DocumentChunk {
+    // Generate content hash for deduplication
+    const contentHash = generateContentHash(content);
+
     const chunk = new DocumentChunk(
       id,
       documentId,
       content,
+      contentHash,
       chunkIndex,
       type,
       metadata,

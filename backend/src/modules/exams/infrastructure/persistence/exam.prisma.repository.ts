@@ -72,10 +72,14 @@ export class PrismaExamRepository implements ExamRepositoryPort {
 
       if (data.chunks.length > 0) {
         await tx.documentChunk.createMany({
-          data: data.chunks.map((c) => ({
-            ...c,
-            examId: created.id,
-          })),
+          data: data.chunks.map((c) => {
+            const { generateContentHash } = require('../../../repository_documents/infrastructure/utils/hash.utils');
+            return {
+              ...c,
+              examId: created.id,
+              contentHash: generateContentHash(c.content), // Add content hash for new field
+            };
+          }),
         });
       }
 

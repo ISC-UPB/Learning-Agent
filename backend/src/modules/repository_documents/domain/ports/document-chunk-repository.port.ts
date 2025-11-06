@@ -131,4 +131,35 @@ export interface DocumentChunkRepositoryPort {
     documentId: string,
     options?: FindChunksOptions,
   ): Promise<FindChunksResult>;
+
+  /**
+   * Find a chunk by its content hash to detect duplicates
+   * @param documentId ID of the document
+   * @param contentHash Hash of the chunk content
+   */
+  findByContentHash(
+    documentId: string,
+    contentHash: string,
+  ): Promise<DocumentChunk | null>;
+
+  /**
+   * Find multiple chunks by their content hashes (batch operation)
+   * @param documentId ID of the document
+   * @param contentHashes Array of content hashes to search
+   */
+  findByContentHashes(
+    documentId: string,
+    contentHashes: string[],
+  ): Promise<DocumentChunk[]>;
+
+  /**
+   * Save chunks with deduplication - skips chunks with existing hashes
+   * @param chunks Chunks to save
+   * @returns Saved chunks (only new ones, not duplicates)
+   */
+  saveManyWithDeduplication(chunks: DocumentChunk[]): Promise<{
+    saved: DocumentChunk[];
+    skipped: number;
+    duplicateHashes: string[];
+  }>;
 }
