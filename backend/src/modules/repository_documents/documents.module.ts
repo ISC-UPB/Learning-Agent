@@ -46,6 +46,8 @@ import { PrismaProcessingJobRepositoryAdapter } from './infrastructure/persisten
 // Domain services
 import { DocumentChunkingService } from './domain/services/document-chunking.service';
 import { DocumentEmbeddingService } from './domain/services/document-embedding.service';
+import { RetryService } from './domain/services/retry.service';
+import { DeadLetterQueueService } from './domain/services/dead-letter-queue.service';
 
 // Contract use cases
 import { GetDocumentsBySubjectUseCase } from './application/queries/get-documents-by-subject.usecase';
@@ -110,11 +112,19 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
     // DeadLetter repository provider (uses PrismaService)
     DeadLetterRepository,
 
+    // RetryService - injectable service for backoff and delay logic
+    RetryService,
+
+    // DeadLetterQueueService - orchestrates job retry and DLQ operations
+    DeadLetterQueueService,
+
     // Ensure ProcessingJobService receives the DeadLetterRepository instance (sets the static dependency)
     {
       provide: ProcessingJobService,
       useFactory: (deadLetterRepo: DeadLetterRepository) => {
         ProcessingJobService.setDeadLetterRepo(deadLetterRepo);
+        // Validate dependencies are properly wired
+        ProcessingJobService.validateDependencies();
         return ProcessingJobService;
       },
       inject: [DeadLetterRepository],

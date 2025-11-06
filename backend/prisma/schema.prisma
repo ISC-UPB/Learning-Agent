@@ -418,6 +418,7 @@ enum ProcessingStatus {
   FAILED // Falló con error
   CANCELLED // Cancelado manualmente
   RETRYING // Reintentando después de fallo
+  DEAD_LETTER // Falló múltiples veces, movido a DLQ
 }
 
 enum ChunkType {

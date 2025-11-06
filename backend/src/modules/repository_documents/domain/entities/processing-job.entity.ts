@@ -34,4 +34,5 @@ export enum ProcessingStatus {
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
   RETRYING = 'RETRYING',
+  DEAD_LETTER = 'DEAD_LETTER',
 }
