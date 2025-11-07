@@ -9,9 +9,10 @@ import {
   CreateInterviewQuestionDto,
   UpdateInterviewQuestionDto,
 } from '../dtos/interview-exam.dto';
+import { IntExamRepositoryPort } from '../domain/ports/int-exam.repository.port';
 
 @Injectable()
-export class IntExamRepository {
+export class IntExamRepository implements IntExamRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createInterviewQuestionDto: CreateInterviewQuestionDto) {

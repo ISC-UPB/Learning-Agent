@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IntExamRepository } from './int-exam.repository';
+import { IntExamRepositoryPort } from '../domain/ports/int-exam.repository.port';
 import { PrismaService } from 'src/core/prisma/prisma.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { createInterviewPrismaMock } from '../../../../test/helpers/prisma-mocks';
 import { sampleCreateDto, sampleUpdateDto } from '../../../../test/helpers/fixtures/interview-fixtures';
 
 describe('IntExamRepository (unit)', () => {
-  let service: IntExamRepository;
+  let service: IntExamRepositoryPort;
   let mockPrisma: any;
 
   beforeEach(async () => {
@@ -14,12 +15,15 @@ describe('IntExamRepository (unit)', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        IntExamRepository,
+        {
+          provide: IntExamRepositoryPort,
+          useClass: IntExamRepository,
+        },
         { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 
-    service = module.get<IntExamRepository>(IntExamRepository);
+    service = module.get<IntExamRepositoryPort>(IntExamRepositoryPort);
   });
 
   afterEach(() => jest.resetAllMocks());
