@@ -8,7 +8,7 @@ import {
   PermissionNotFoundError,
   RoleTransactionError,
 } from '../../domain/errors/role.errors';
-import { RoleMapper } from '../../domain/mappers';
+import { RoleMapper, PermissionMapper } from '../../domain/mappers';
 
 @Injectable()
 export class RolePrismaRepository implements RoleRepositoryPort {
@@ -141,8 +141,6 @@ export class RolePrismaRepository implements RoleRepositoryPort {
       distinct: ['id'],
     });
 
-    return permissions.map(
-      (p) => new Permission(p.id, p.action, p.resource, p.description),
-    );
+    return PermissionMapper.toDomainList(permissions);
   }
 }
