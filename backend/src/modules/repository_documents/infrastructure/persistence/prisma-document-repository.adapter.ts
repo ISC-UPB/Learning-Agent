@@ -5,6 +5,10 @@ import {
   Document,
   DocumentStatus,
 } from '../../domain/entities/document.entity';
+import {
+  TransactionFailedError,
+  DocumentNotSavedError,
+} from '../../../../shared/exceptions/document.exceptions';
 
 @Injectable()
 export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
@@ -444,13 +448,13 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     extractedText?: string,
   ): Promise<Document> {
     if (embeddings.length !== chunks.length) {
-      throw new Error(
+      throw new TransactionFailedError(
         `Embeddings count (${embeddings.length}) must match chunks count (${chunks.length})`,
       );
     }
 
     this.logger.log(
-      `Starting atomic save: document ${document.id} with ${chunks.length} chunks and embeddings`,
+      `Starting atomic transaction: document ${document.id} with ${chunks.length} chunks and embeddings`,
     );
 
     try {
@@ -526,7 +530,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
         }
 
         this.logger.log(
-          `Transaction completed: document ${document.id}, ${chunks.length} chunks saved with embeddings`,
+          `Transaction completed successfully: document ${document.id}, ${chunks.length} chunks with embeddings saved`,
         );
 
         return savedDoc;
@@ -536,9 +540,11 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     } catch (error) {
       this.logger.error(
         `Transaction failed for document ${document.id}: ${error.message}`,
+        error.stack,
       );
-      throw new Error(
+      throw new DocumentNotSavedError(
         `Failed to atomically save document with chunks and embeddings: ${error.message}`,
+        error,
       );
     }
   }
