@@ -1,24 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IntExamRepository } from './int-exam.repository';
 import { PrismaService } from 'src/core/prisma/prisma.service';
-import { CreateInterviewQuestionDto, UpdateInterviewQuestionDto } from '../dtos/interview-exam.dto';
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { createInterviewPrismaMock } from '../../../../test/helpers/prisma-mocks';
+import { sampleCreateDto, sampleUpdateDto } from '../../../../test/helpers/fixtures/interview-fixtures';
 
 describe('IntExamRepository (unit)', () => {
   let service: IntExamRepository;
   let mockPrisma: any;
 
   beforeEach(async () => {
-    mockPrisma = {
-      interviewQuestion: {
-        create: jest.fn(),
-        findMany: jest.fn(),
-        findUnique: jest.fn(),
-        count: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
-      },
-    };
+    mockPrisma = createInterviewPrismaMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,13 +25,7 @@ describe('IntExamRepository (unit)', () => {
   afterEach(() => jest.resetAllMocks());
 
   it('create should persist and return the created question', async () => {
-    const dto: CreateInterviewQuestionDto = {
-      courseId: 'course-1',
-      docId: 'doc-1',
-      type: 'open_question',
-      json: { q: 'hello' },
-    };
-
+    const dto = sampleCreateDto;
     const created = { id: 'id-1', ...dto };
     mockPrisma.interviewQuestion.create.mockResolvedValue(created);
 
@@ -59,11 +45,7 @@ describe('IntExamRepository (unit)', () => {
   });
 
   it('create should throw ConflictException on unique constraint (P2002)', async () => {
-    const dto: CreateInterviewQuestionDto = {
-      courseId: 'course-1',
-      docId: 'doc-1',
-      type: 'open_question',
-    };
+    const dto = sampleCreateDto;
 
     const err: any = new Error('unique');
     err.code = 'P2002';
@@ -106,7 +88,7 @@ describe('IntExamRepository (unit)', () => {
     err.code = 'P2025';
     mockPrisma.interviewQuestion.update.mockRejectedValue(err);
 
-    const dto: UpdateInterviewQuestionDto = { json: { a: 1 } };
+    const dto = sampleUpdateDto;
     await expect(service.update('nope', dto)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
