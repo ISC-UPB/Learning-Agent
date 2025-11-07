@@ -446,6 +446,19 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }>,
     embeddings: number[][],
     extractedText?: string,
+    documentIndex?: {
+      title: string;
+      chapters?: Array<{
+        title: string;
+        description?: string;
+        order: number;
+        subtopics?: Array<{
+          title: string;
+          description?: string;
+          order: number;
+        }>;
+      }>;
+    },
   ): Promise<Document> {
     if (embeddings.length !== chunks.length) {
       throw new TransactionFailedError(
@@ -454,7 +467,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
     }
 
     this.logger.log(
-      `Starting atomic transaction: document ${document.id} with ${chunks.length} chunks and embeddings`,
+      `Starting atomic transaction: document ${document.id} with ${chunks.length} chunks, embeddings${documentIndex ? ' and index' : ''}`,
     );
 
     try {
@@ -520,17 +533,59 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
           skipDuplicates: false,
         });
 
-        for (let i = 0; i < chunks.length; i++) {
-          await tx.$queryRaw`
-            UPDATE "document_chunks" 
-            SET embedding = ${JSON.stringify(embeddings[i])}::vector,
+        // Optimized batch update for embeddings using CASE statement
+        if (embeddings.length > 0) {
+          const caseStatements = chunks.map((chunk, i) => 
+            `WHEN id = '${chunk.id}' THEN '${JSON.stringify(embeddings[i])}'::vector`
+          ).join(' ');
+
+          const ids = chunks.map(c => `'${c.id}'`).join(',');
+
+          await tx.$executeRawUnsafe(`
+            UPDATE "document_chunks"
+            SET embedding = CASE ${caseStatements} END,
                 "updatedAt" = NOW()
-            WHERE id = ${chunks[i].id}
-          `;
+            WHERE id IN (${ids})
+          `);
+        }
+
+        // Create document index if provided
+        if (documentIndex) {
+          const createdIndex = await tx.documentIndex.create({
+            data: {
+              documentId: document.id,
+              title: documentIndex.title,
+              status: 'GENERATED',
+            },
+          });
+
+          if (documentIndex.chapters && documentIndex.chapters.length > 0) {
+            for (const chapter of documentIndex.chapters) {
+              const createdChapter = await tx.indexChapter.create({
+                data: {
+                  indexId: createdIndex.id,
+                  title: chapter.title,
+                  description: chapter.description,
+                  order: chapter.order,
+                },
+              });
+
+              if (chapter.subtopics && chapter.subtopics.length > 0) {
+                await tx.indexSubtopic.createMany({
+                  data: chapter.subtopics.map(subtopic => ({
+                    chapterId: createdChapter.id,
+                    title: subtopic.title,
+                    description: subtopic.description,
+                    order: subtopic.order,
+                  })),
+                });
+              }
+            }
+          }
         }
 
         this.logger.log(
-          `Transaction completed successfully: document ${document.id}, ${chunks.length} chunks with embeddings saved`,
+          `Transaction completed successfully: document ${document.id}, ${chunks.length} chunks with embeddings${documentIndex ? ' and index' : ''} saved`,
         );
 
         return savedDoc;

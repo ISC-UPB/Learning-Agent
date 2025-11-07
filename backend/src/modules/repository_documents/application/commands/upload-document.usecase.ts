@@ -28,6 +28,19 @@ export interface UploadWithPreGeneratedDataOptions {
   reuseGeneratedData?: boolean;
   courseId?: string;
   classId?: string;
+  documentIndex?: {
+    title: string;
+    chapters?: Array<{
+      title: string;
+      description?: string;
+      order: number;
+      subtopics?: Array<{
+        title: string;
+        description?: string;
+        order: number;
+      }>;
+    }>;
+  };
 }
 
 @Injectable()
@@ -108,10 +121,11 @@ export class UploadDocumentUseCase {
             chunkData,
             options.preGeneratedEmbeddings,
             options.extractedText,
+            options.documentIndex,
           );
 
         this.logger.log(
-          `Document ${documentId} saved atomically with ${chunkData.length} chunks and embeddings`,
+          `Document ${documentId} saved atomically with ${chunkData.length} chunks, embeddings${options.documentIndex ? ' and index' : ''}`,
         );
       } else {
         savedDocument = await this.documentRepository.save(document);

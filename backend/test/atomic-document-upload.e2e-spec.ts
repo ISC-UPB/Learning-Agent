@@ -186,5 +186,142 @@ describe('Atomic Document Upload E2E', () => {
       expect(documentsInDB).toHaveLength(0);
       expect(chunksInDB).toHaveLength(0);
     });
+
+    it('should rollback document_index if transaction fails after index creation', async () => {
+      const mockDocumentIndex = {
+        title: 'Test Document Index',
+        chapters: [
+          {
+            title: 'Chapter 1',
+            description: 'First chapter',
+            order: 0,
+            subtopics: [
+              { title: 'Subtopic 1.1', description: 'First subtopic', order: 0 },
+            ],
+          },
+        ],
+      };
+
+      storageAdapter.uploadDocument.mockResolvedValue({
+        fileName: 'test-with-index.pdf',
+        url: 'http://test.com/test-with-index.pdf',
+      } as any);
+
+      storageAdapter.softDeleteDocument.mockResolvedValue(undefined);
+
+      jest
+        .spyOn(documentRepository, 'saveWithChunksAndEmbeddings')
+        .mockRejectedValue(new Error('Simulated failure after index creation'));
+
+      try {
+        await uploadUseCase.execute(mockFile, 'test-user', {
+          reuseGeneratedData: true,
+          preGeneratedChunks: mockPreGeneratedChunks,
+          preGeneratedEmbeddings: mockPreGeneratedEmbeddings,
+          extractedText: 'Test text',
+          documentIndex: mockDocumentIndex,
+        });
+      } catch (error) {
+        // Expected
+      }
+
+      const documentsInDB = await prisma.document.findMany();
+      const indexesInDB = await prisma.documentIndex.findMany();
+      const chaptersInDB = await prisma.indexChapter.findMany();
+      const subtopicsInDB = await prisma.indexSubtopic.findMany();
+
+      expect(documentsInDB).toHaveLength(0);
+      expect(indexesInDB).toHaveLength(0);
+      expect(chaptersInDB).toHaveLength(0);
+      expect(subtopicsInDB).toHaveLength(0);
+    });
+
+    it('should rollback embeddings if transaction fails during embedding update', async () => {
+      storageAdapter.uploadDocument.mockResolvedValue({
+        fileName: 'test-embedding-fail.pdf',
+        url: 'http://test.com/test-embedding-fail.pdf',
+      } as any);
+
+      storageAdapter.softDeleteDocument.mockResolvedValue(undefined);
+
+      // Mock repository to simulate failure during embedding batch update
+      const mockSpy = jest
+        .spyOn(documentRepository, 'saveWithChunksAndEmbeddings')
+        .mockRejectedValue(new Error('Embedding batch update failed'));
+
+      try {
+        await uploadUseCase.execute(mockFile, 'test-user', {
+          reuseGeneratedData: true,
+          preGeneratedChunks: mockPreGeneratedChunks,
+          preGeneratedEmbeddings: mockPreGeneratedEmbeddings,
+        });
+      } catch (error) {
+        // Expected
+      }
+
+      // Verify no partial data persisted
+      const chunksInDB = await prisma.documentChunk.findMany();
+      expect(chunksInDB).toHaveLength(0);
+
+      // Verify embeddings table has no orphaned records
+      const chunksWithEmbeddings = await prisma.documentChunk.findMany({
+        where: { embedding: { not: null } },
+      });
+      expect(chunksWithEmbeddings).toHaveLength(0);
+
+      mockSpy.mockRestore();
+    });
+
+    it('should handle complete pipeline failure and verify no data leakage', async () => {
+      const mockCompleteData = {
+        reuseGeneratedData: true,
+        preGeneratedChunks: mockPreGeneratedChunks,
+        preGeneratedEmbeddings: mockPreGeneratedEmbeddings,
+        extractedText: 'Complete test text',
+        documentIndex: {
+          title: 'Complete Index',
+          chapters: [
+            {
+              title: 'Chapter 1',
+              order: 0,
+              subtopics: [{ title: 'Sub 1', order: 0 }],
+            },
+          ],
+        },
+      };
+
+      storageAdapter.uploadDocument.mockResolvedValue({
+        fileName: 'test-complete-fail.pdf',
+        url: 'http://test.com/test-complete-fail.pdf',
+      } as any);
+
+      storageAdapter.softDeleteDocument.mockResolvedValue(undefined);
+
+      jest
+        .spyOn(documentRepository, 'saveWithChunksAndEmbeddings')
+        .mockRejectedValue(new Error('Complete pipeline failure'));
+
+      try {
+        await uploadUseCase.execute(mockFile, 'test-user', mockCompleteData);
+      } catch (error) {
+        // Expected
+      }
+
+      // Comprehensive check: no data should exist in any related table
+      const documentsCount = await prisma.document.count();
+      const chunksCount = await prisma.documentChunk.count();
+      const indexesCount = await prisma.documentIndex.count();
+      const chaptersCount = await prisma.indexChapter.count();
+      const subtopicsCount = await prisma.indexSubtopic.count();
+
+      expect(documentsCount).toBe(0);
+      expect(chunksCount).toBe(0);
+      expect(indexesCount).toBe(0);
+      expect(chaptersCount).toBe(0);
+      expect(subtopicsCount).toBe(0);
+
+      // Verify storage rollback was called
+      expect(storageAdapter.softDeleteDocument).toHaveBeenCalledWith('test-complete-fail.pdf');
+    });
   });
 });

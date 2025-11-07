@@ -171,5 +171,18 @@ export interface DocumentRepositoryPort {
     }>,
     embeddings: number[][],
     extractedText?: string,
+    documentIndex?: {
+      title: string;
+      chapters?: Array<{
+        title: string;
+        description?: string;
+        order: number;
+        subtopics?: Array<{
+          title: string;
+          description?: string;
+          order: number;
+        }>;
+      }>;
+    },
   ): Promise<Document>;
 }
