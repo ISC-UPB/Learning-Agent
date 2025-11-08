@@ -9,6 +9,7 @@ import {
   TransactionFailedError,
   DocumentNotSavedError,
 } from '../../../../shared/exceptions/document.exceptions';
+import { generateContentHash } from '../utils/hash.utils';
 
 @Injectable()
 export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
@@ -518,6 +519,7 @@ export class PrismaDocumentRepositoryAdapter implements DocumentRepositoryPort {
           id: chunk.id,
           documentId: document.id,
           content: chunk.content,
+          contentHash: generateContentHash(chunk.content),
           chunkIndex: chunk.chunkIndex,
           startPosition: 0,
           endPosition: chunk.content.length,
