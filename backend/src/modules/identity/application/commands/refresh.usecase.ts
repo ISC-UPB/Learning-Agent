@@ -37,8 +37,7 @@ export class RefreshUseCase {
       email: payload.email,
     });
 
-    const refreshTTL = this.config.getJwtRefreshTTL();
-    const { expiresAt } = this.tokenExpiration.calculateExpiration(refreshTTL);
+    const { expiresAt } = this.tokenExpiration.calculateRefreshExpiration();
 
     await this.sessions.createSession({
       userId: payload.sub,
