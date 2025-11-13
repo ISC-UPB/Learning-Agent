@@ -48,6 +48,7 @@ import { DocumentChunkingService } from './domain/services/document-chunking.ser
 import { DocumentEmbeddingService } from './domain/services/document-embedding.service';
 import { RetryService } from './domain/services/retry.service';
 import { DeadLetterQueueService } from './domain/services/dead-letter-queue.service';
+import { ChunkingValidationService } from './domain/services/chunking-validation.service';
 
 // Contract use cases
 import { GetDocumentsBySubjectUseCase } from './application/queries/get-documents-by-subject.usecase';
@@ -85,6 +86,7 @@ import { StorageReconciliationService } from './infrastructure/services/storage-
 
     ContextualLoggerService,
     StorageReconciliationService,
+    ChunkingValidationService,
 
     { provide: DOCUMENT_STORAGE_PORT, useClass: S3StorageAdapter },
     {

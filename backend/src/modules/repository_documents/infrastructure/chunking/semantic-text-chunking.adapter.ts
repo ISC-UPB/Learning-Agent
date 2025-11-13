@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentChunk } from '../../domain/entities/document-chunk.entity';
 import { DocumentChunkService } from '../../domain/services/document-chunk.service';
+import { ChunkingValidationService } from '../../domain/services/chunking-validation.service';
+import { CHUNKING_LIMITS } from '../config/chunking.config';
 import type {
   ChunkingStrategyPort,
   ChunkingConfig,
@@ -21,6 +23,10 @@ import type {
 export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
   private readonly logger = new Logger(SemanticTextChunkingAdapter.name);
 
+  constructor(
+    private readonly chunkingValidationService: ChunkingValidationService,
+  ) {}
+
   /**
    * Split text into chunks using semantic strategy
    */
@@ -33,6 +39,8 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
       `Starting semantic chunking for document ${documentId}: ` +
         `${text.length} characters, maxSize: ${config.maxChunkSize}, overlap: ${config.overlap}`,
     );
+
+    this.chunkingValidationService.validateBeforeChunking(text.length, config);
 
     const startTime = Date.now();
 
@@ -83,6 +91,8 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
     // 5. Calculate statistics
     const statistics = this.calculateStatistics(chunksWithOverlap, config);
 
+    this.chunkingValidationService.validateChunkCount(chunksWithOverlap.length);
+
     const processingTime = Date.now() - startTime;
     this.logger.log(
       `Chunking completed in ${processingTime}ms: ${chunksWithOverlap.length} chunks generated`,
@@ -99,12 +109,13 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
    * Validate chunking configuration
    */
   validateConfig(config: ChunkingConfig): boolean {
-    if (config.maxChunkSize <= 0) return false;
-    if (config.overlap < 0 || config.overlap >= config.maxChunkSize)
+    try {
+      const result = this.chunkingValidationService.validateChunkingConfig(config);
+      return result.isValid;
+    } catch (error) {
+      this.logger.error(`Config validation failed: ${error.message}`);
       return false;
-    if (config.minChunkSize <= 0 || config.minChunkSize > config.maxChunkSize)
-      return false;
-    return true;
+    }
   }
 
   /**
@@ -112,11 +123,11 @@ export class SemanticTextChunkingAdapter implements ChunkingStrategyPort {
    */
   getDefaultConfig(): ChunkingConfig {
     return {
-      maxChunkSize: 1000, // Optimal size for embeddings
-      overlap: 100, // 10% overlap
+      maxChunkSize: CHUNKING_LIMITS.DEFAULT_CHUNK_SIZE,
+      overlap: CHUNKING_LIMITS.DEFAULT_OVERLAP,
       respectParagraphs: true,
       respectSentences: true,
-      minChunkSize: 50, // Minimum to be useful
+      minChunkSize: CHUNKING_LIMITS.MIN_CHUNK_SIZE,
     };
   }
 
