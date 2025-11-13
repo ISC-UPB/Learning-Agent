@@ -60,8 +60,8 @@ export class LoginUseCase {
     const accessToken = this.tokens.signAccess(payload);
     const refreshToken = this.tokens.signRefresh(payload);
 
-    const refreshTTL = this.config.getJwtRefreshTTL();
-    const { expiresAt } = this.tokenExpiration.calculateExpiration(refreshTTL);
+    
+    const { expiresAt } = this.tokenExpiration.calculateRefreshExpiration();
 
     await this.sessions.createSession({
       userId: user.id,

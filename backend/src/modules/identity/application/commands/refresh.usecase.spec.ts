@@ -11,8 +11,9 @@ describe('RefreshUseCase', () => {
   beforeEach(() => {
     sessionRepo = { findByRefreshToken: jest.fn(), revokeById: jest.fn(), createSession: jest.fn() };
     tokenService = { verifyRefresh: jest.fn(), signAccess: jest.fn(), signRefresh: jest.fn() };
-    tokenExpiration = { 
-      calculateExpiration: jest.fn().mockReturnValue({ expiresAt: new Date() }) 
+    tokenExpiration = {
+      calculateRefreshExpiration: jest.fn().mockReturnValue({ expiresAt: new Date() }),
+      calculateAccessExpiration: jest.fn().mockReturnValue({ expiresAt: new Date() }),
     };
     config = {
       getJwtRefreshTTL: jest.fn().mockReturnValue('7d'),

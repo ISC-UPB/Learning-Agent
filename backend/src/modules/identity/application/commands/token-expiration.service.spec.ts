@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TokenExpirationService, InvalidTTLFormatError, UnsupportedTTLUnitError } from './token-expiration.service';
+import { TokenExpirationService, InvalidTTLFormatError, UnsupportedTTLUnitError } from '../../domain/services/token-expiration.service';
 import { CONFIG_PORT } from '../../tokens';
-import type { ConfigPort } from '../ports/config.port';
+import type { ConfigPort } from '../../domain/ports/config.port';
 
 describe('TokenExpirationService', () => {
   let service: TokenExpirationService;
@@ -11,7 +11,7 @@ describe('TokenExpirationService', () => {
     getJwtRefreshTTL: jest.fn().mockReturnValue('7d'),
     getJwtAccessSecret: jest.fn().mockReturnValue('access-secret'),
     getJwtRefreshSecret: jest.fn().mockReturnValue('refresh-secret'),
-  } as unknown as ConfigPort;
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -31,8 +31,8 @@ describe('TokenExpirationService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('calculateAccessExpiration / calculateRefreshExpiration', () => {
-    it('should calculate access expiration based on configured TTL', () => {
+  describe('calculateAccessExpiration', () => {
+    it('should calculate expiration for access token using config TTL', () => {
       const now = new Date('2025-01-01T00:00:00Z');
       const result = service.calculateAccessExpiration(now);
 
@@ -40,8 +40,10 @@ describe('TokenExpirationService', () => {
       expect(result.expiresAt.getTime()).toBe(expected.getTime());
       expect(result.milliseconds).toBe(15 * 60 * 1000);
     });
+  });
 
-    it('should calculate refresh expiration based on configured TTL', () => {
+  describe('calculateRefreshExpiration', () => {
+    it('should calculate expiration for refresh token using config TTL', () => {
       const now = new Date('2025-01-01T00:00:00Z');
       const result = service.calculateRefreshExpiration(now);
 
@@ -51,26 +53,26 @@ describe('TokenExpirationService', () => {
     });
   });
 
-  describe('internal calculate function', () => {
+  describe('calculate (private)', () => {
     it('should throw InvalidTTLFormatError for invalid TTL format', () => {
-      // @ts-ignore - access to private method for testing
+      
       expect(() => service['calculate']('invalid', new Date())).toThrow(InvalidTTLFormatError);
     });
 
     it('should throw UnsupportedTTLUnitError for unsupported unit', () => {
-      // @ts-ignore - access to private method for testing
+      
       expect(() => service['calculate']('10x', new Date())).toThrow(UnsupportedTTLUnitError);
     });
 
-    it('should correctly parse valid TTL formats', () => {
+    it('should correctly parse all valid TTL formats', () => {
       const now = new Date('2025-01-01T00:00:00Z');
-      // @ts-ignore
+      
       const seconds = service['calculate']('10s', now);
-      // @ts-ignore
+      
       const minutes = service['calculate']('5m', now);
-      // @ts-ignore
+      
       const hours = service['calculate']('2h', now);
-      // @ts-ignore
+     
       const days = service['calculate']('1d', now);
 
       expect(seconds.milliseconds).toBe(10 * 1000);

@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CONFIG_PORT } from '../../tokens';
+import type { ConfigPort } from '../ports/config.port';
 
 export class InvalidTTLFormatError extends Error {
   constructor(ttl: string) {
@@ -22,80 +24,48 @@ export interface TTLCalculationResult {
 @Injectable()
 export class TokenExpirationService {
   private readonly unitMap: Record<string, number> = {
-    s: 1000,        
-    m: 60000,       
-    h: 3600000,     
-    d: 86400000,    
+    s: 1000,
+    m: 60000,
+    h: 3600000,
+    d: 86400000,
   };
 
+  constructor(
+    @Inject(CONFIG_PORT) private readonly config: ConfigPort,
+  ) {}
+
   /**
-   * Calculate expiration date based on TTL string
-   * @param ttl - Time to live string in format: <number><unit> (e.g., "15m", "2h", "7d")
-   * @param fromDate - Optional base date (defaults to current date)
-   * @returns TTLCalculationResult with expiration date and duration in milliseconds
-   * @throws {InvalidTTLFormatError} When TTL format is invalid
-   * @throws {UnsupportedTTLUnitError} When TTL unit is not supported
+   * Calcula la expiración del token de acceso.
    */
-  calculateExpiration(ttl: string, fromDate: Date = new Date()): TTLCalculationResult {
-    this.validateTTLFormat(ttl);
-
-    const { value, unit } = this.parseTTL(ttl);
-    
-    if (!this.unitMap[unit]) {
-      throw new UnsupportedTTLUnitError(unit);
-    }
-
-    const milliseconds = value * this.unitMap[unit];
-    const expiresAt = new Date(fromDate.getTime() + milliseconds);
-
-    return { expiresAt, milliseconds };
+  calculateAccessExpiration(fromDate: Date = new Date()): TTLCalculationResult {
+    const ttl = this.config.getJwtAccessTTL();
+    return this.calculate(ttl, fromDate);
   }
 
   /**
-   * Parse TTL string into value and unit
+   * Calcula la expiración del token de refresh.
    */
-  private parseTTL(ttl: string): { value: number; unit: string } {
-    const match = ttl.match(/^(\d+)([smhd])$/);
-    if (!match) {
-      throw new InvalidTTLFormatError(ttl);
-    }
+  calculateRefreshExpiration(fromDate: Date = new Date()): TTLCalculationResult {
+    const ttl = this.config.getJwtRefreshTTL();
+    return this.calculate(ttl, fromDate);
+  }
+
+  /**
+   * Lógica interna para convertir TTL a fecha/milisegundos.
+   */
+  private calculate(ttl: string, fromDate: Date): TTLCalculationResult {
+  const match = ttl.match(/^(\d+)([a-zA-Z])$/);
+    if (!match) throw new InvalidTTLFormatError(ttl);
 
     const value = parseInt(match[1], 10);
     const unit = match[2];
 
-    return { value, unit };
-  }
+    const multiplier = this.unitMap[unit];
+    if (!multiplier) throw new UnsupportedTTLUnitError(unit);
 
-  /**
-   * Validate TTL string format
-   */
-  private validateTTLFormat(ttl: string): void {
-    if (typeof ttl !== 'string') {
-      throw new InvalidTTLFormatError(String(ttl));
-    }
+    const milliseconds = value * multiplier;
+    const expiresAt = new Date(fromDate.getTime() + milliseconds);
 
-    if (!ttl.match(/^\d+[smhd]$/)) {
-      throw new InvalidTTLFormatError(ttl);
-    }
-  }
-
-  /**
-   * Get supported TTL units
-   */
-  getSupportedUnits(): string[] {
-    return Object.keys(this.unitMap);
-  }
-
-  /**
-   * Convert TTL to milliseconds
-   */
-  toMilliseconds(ttl: string): number {
-    const { value, unit } = this.parseTTL(ttl);
-    
-    if (!this.unitMap[unit]) {
-      throw new UnsupportedTTLUnitError(unit);
-    }
-
-    return value * this.unitMap[unit];
+    return { expiresAt, milliseconds };
   }
 }
